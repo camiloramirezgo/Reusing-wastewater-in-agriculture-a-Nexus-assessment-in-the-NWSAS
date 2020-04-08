@@ -21,6 +21,12 @@ import matplotlib.patches as mpatches
 import matplotlib.colors as colors
 from plotnine import *
 from pandas.api.types import CategoricalDtype
+import pyeto
+import math
+
+math.exp = np.exp
+math.pow = np.power
+math.sqrt = np.sqrt
 
 class DataFrame:
     """
@@ -66,14 +72,14 @@ class DataFrame:
                             self.df[variable] *= value
                                 
                     if save_csv:
-                        self.df.to_csv(file_name + ".csv", index = False)
+                        self.df.to_csv(file_name + ".gz", index = False)
                     
                 except FileNotFoundError:
                     print('No .csv files were found in the directory!')
                     
             else:
                 try:
-                    self.df = pd.read_csv(input_file + '.csv')
+                    self.df = pd.read_csv(input_file + '.gz')
                 except FileNotFoundError:
                     print('Not such file in directory!')
             
@@ -249,7 +255,7 @@ class DataFrame:
         else:
             self.df.loc[is_region, 'GWPumpingEnergy'] = (density * 9.81 * (delivered_head + self.df.loc[is_region, 'GroundwaterDepth'])) / 3600000 / pump_efficiency
             
-    def reverse_osmosis_energy(self, region, osmosis):
+    def reverse_osmosis_energy(self, region, threshold, osmosis):
         """
         Calculates the energy required for desalinisation of groundwater in each cell (kWh/m3)
         """
@@ -259,6 +265,7 @@ class DataFrame:
         concentration = self.df.loc[is_region, 'TDS']
         
         self.df.loc[is_region, 'DesalinationEnergy'] = osmosis.minimum_energy(solutes, concentration, temperature)
+        self.df.loc[is_region & (self.df['TDS']<=threshold), 'DesalinationEnergy'] = 0
         
     def total_irrigation_energy(self):
         """
@@ -325,6 +332,80 @@ class DataFrame:
         self.df['IrrigationFutureReclaimedWater'] = None
         self.df['PopulationFutureReclaimedWater'] = self.df['PopulationWaterPerCluster'].dropna() * pop_water_fraction * pop_growth
         self.df['IrrigationFutureReclaimedWater'] = self.df['IrrigationWaterPerCluster'].dropna() * agri_water_fraction * agri_growth
+    
+    def get_evap_i(self, lat, elev, wind, srad, tmin, tmax, tavg, month):
+        J = 15 + (month-1)*30
+            
+        latitude = pyeto.deg2rad(lat)
+        atmosphericVapourPressure = pyeto.avp_from_tmin(tmin)
+        saturationVapourPressure = pyeto.svp_from_t(tavg)
+        ird = pyeto.inv_rel_dist_earth_sun(J)
+        solarDeclination = pyeto.sol_dec(J)
+        sha = [pyeto.sunset_hour_angle(l, solarDeclination) for l in latitude]
+        extraterrestrialRad = [pyeto.et_rad(x, solarDeclination,y,ird) for 
+                               x, y in zip(latitude,sha)]
+        clearSkyRad = pyeto.cs_rad(elev,extraterrestrialRad)
+        netInSolRadnet = pyeto.net_in_sol_rad(srad*0.001, albedo=0.065)
+        netOutSolRadnet = pyeto.net_out_lw_rad(tmin, tmax, srad*0.001, clearSkyRad, 
+                                               atmosphericVapourPressure)
+        netRadiation = pyeto.net_rad(netInSolRadnet,netOutSolRadnet)
+        tempKelvin = pyeto.celsius2kelvin(tavg)
+        windSpeed2m = wind
+        slopeSvp = pyeto.delta_svp(tavg)
+        atmPressure = pyeto.atm_pressure(elev)
+        psyConstant = pyeto.psy_const(atmPressure)
+        
+        return self.fao56_penman_monteith(netRadiation, tempKelvin, windSpeed2m, 
+                                          saturationVapourPressure, 
+                                          atmosphericVapourPressure,
+                                          slopeSvp, psyConstant)
+
+    def get_eto(self, eto, lat, elevation, wind, srad, tmin, tmax, tavg):
+        '''
+        calculate ETo for each row for each month 
+        '''
+        for i in range(1,13):
+            self.df['{}_{}'.format(eto, i)] = 0
+            self.df['{}_{}'.format(eto, i)] = self.get_evap_i(self.df[lat],
+                                                              self.df[elevation],
+                                                              self.df['{}_{}'.format(wind, i)],
+                                                              self.df['{}_{}'.format(srad, i)],
+                                                              self.df['{}_{}'.format(tmin, i)],
+                                                              self.df['{}_{}'.format(tmax, i)],
+                                                              self.df['{}_{}'.format(tavg, i)],
+                                                              i) * 30
+    
+    def fao56_penman_monteith(self, net_rad, t, ws, svp, avp, delta_svp, psy, shf=0.0):
+        """
+        Estimate reference evapotranspiration (ETo) from a hypothetical
+        short grass reference surface using the FAO-56 Penman-Monteith equation.
+        Based on equation 6 in Allen et al (1998).
+        :param net_rad: Net radiation at crop surface [MJ m-2 day-1]. If
+            necessary this can be estimated using ``net_rad()``.
+        :param t: Air temperature at 2 m height [deg Kelvin].
+        :param ws: Wind speed at 2 m height [m s-1]. If not measured at 2m,
+            convert using ``wind_speed_at_2m()``.
+        :param svp: Saturation vapour pressure [kPa]. Can be estimated using
+            ``svp_from_t()''.
+        :param avp: Actual vapour pressure [kPa]. Can be estimated using a range
+            of functions with names beginning with 'avp_from'.
+        :param delta_svp: Slope of saturation vapour pressure curve [kPa degC-1].
+            Can be estimated using ``delta_svp()``.
+        :param psy: Psychrometric constant [kPa deg C]. Can be estimatred using
+            ``psy_const_of_psychrometer()`` or ``psy_const()``.
+        :param shf: Soil heat flux (G) [MJ m-2 day-1] (default is 0.0, which is
+            reasonable for a daily or 10-day time steps). For monthly time steps
+            *shf* can be estimated using ``monthly_soil_heat_flux()`` or
+            ``monthly_soil_heat_flux2()``.
+        :return: Reference evapotranspiration (ETo) from a hypothetical
+            grass reference surface [mm day-1].
+        :rtype: float
+        """
+        a1 = (0.408 * (net_rad - shf) * delta_svp /
+              (delta_svp + (psy * (1 + 0.34 * ws))))
+        a2 = (900 * ws / t * (svp - avp) * psy /
+              (delta_svp + (psy * (1 + 0.34 * ws))))
+        return a1 + a2
     
     def calculate_capex(self, treatment_system_name, treatment_system, values,
                         parameter, variable, limit, limit_func):
@@ -487,15 +568,39 @@ class DataFrame:
         """
         return self.df.groupby('Cluster').agg({'IrrigationReclaimedWater': 'first','PopulationReclaimedWater': 'first'})
     
+    def get_storage(self, leakage, area_percent, storage_depth, agri_water_fraction):
+        """
+        Calculate the losses in the on-farm storage through the year, based on
+        a water balance (leakage + evaporation)
+
+        Parameters
+        ----------
+        leakage : float
+            Leakage in mm per day of water percolated in the on-farm storage.
+        area_percent : float
+            Percentage of area covered by the on-farm storage.
+        storage_depth : float
+            Depth of the on-farm storage in meters.
+        """
+        not_na = self.df['IrrigationReclaimedWater'].notna()
+        self.df.loc[not_na, 'available_storage'] = area_percent  * storage_depth * self.df.loc[not_na, 'IrrigatedArea'] * 10000
+        self.df.loc[not_na, 'leakage_month'] = (leakage / 1000) * 30 * area_percent * self.df.loc[not_na, 'IrrigatedArea'] * 10000
+        # self.df['storage'] = 0
+        for i in range(1,13):
+            self.df.loc[not_na, f'stored_{i}'] = self.df.loc[not_na, 'IrrigationWater'] * agri_water_fraction / 12 - \
+                                      (self.df.loc[not_na, 'leakage_month'] + \
+                                      ((self.df.loc[not_na, f'eto_{i}'] / 1000) * area_percent * self.df.loc[not_na, 'IrrigatedArea'] * 10000))
+            self.df.loc[not_na, f'stored_percentage_{i}'] = self.df.loc[not_na, f'stored_{i}'] / self.df.loc[not_na, 'available_storage']
+            self.df.loc[not_na & (self.df[ f'stored_percentage_{i}'] > 1), f'stored_{i}'] = self.df.loc[not_na & (self.df[ f'stored_percentage_{i}'] > 1), 'available_storage']
+    
     def reused_water(self, percentage_of_reuse, agri_water_fraction):
         """
         Calculates the total final amount of water extracted for irrigation after reuse
         """
-        self.df['FinalIrrigationWater'] = self.df['IrrigationWater']
+        self.df['IrrigationReusedWater'] = self.df.filter(regex='stored_[1-9]').sum(axis=1)
+        self.df['FinalIrrigationWater'] = 0
         not_na = self.df['IrrigationReclaimedWater'].notna()
-        self.df.loc[not_na, 'FinalIrrigationWater'] = self.df.loc[not_na, 'IrrigationWater'] * (1 - agri_water_fraction * percentage_of_reuse[0])
-        self.df['IrrigationReusedWater'] = 0
-        self.df.loc[not_na, 'IrrigationReusedWater'] = self.df.loc[not_na, 'IrrigationWater'] * agri_water_fraction * percentage_of_reuse[0]
+        self.df.loc[not_na, 'FinalIrrigationWater'] = self.df.loc[not_na, 'IrrigationWater'] - self.df.loc[not_na, 'IrrigationReusedWater']
         self.losses = 0
         self.df['PopulationReusedWater'] = 0
         for cluster in set(self.df['Cluster'].dropna()):
@@ -678,7 +783,7 @@ def save_layers(path, df, *layers):
         for layer in layers:
             print('    - Saving {} layer...'.format(layer))
             temp_layer = df[['X', 'Y', layer]]
-            temp_layer.to_csv(path + "/CSV/" + layer + ".csv", index = False)
+            temp_layer.to_csv(path + "/CSV/" + layer + ".gz", index = False)
     except:
         print(layer + ' layer not found')
         

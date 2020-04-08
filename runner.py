@@ -62,14 +62,23 @@ SPE_GW_ROUGHNESS = 'GroundwaterRoughness'
 SPE_PUMP_EFFICIENCY = 'PumpEfficiency'
 SPE_ELEC_PRICE = 'ElectricityPrice'  # Grid price of electricity in USD/kWh
 SPE_CLUSTERING = 'Clustering'
+SPE_LAT = 'lat'
+SPE_ELEVATION = 'elevation'
+SPE_WIND = 'wind'
+SPE_SRAD = 'srad'
+SPE_TMIN = 'tmin'
+SPE_TMAX = 'tmax'
+SPE_TAVG = 'tavg'
+SPE_ETO = 'eto'
+SPE_TDS_THRESHOLD = 'tdsThreshold'
 #SPE_MAX_ROAD_DIST = 'MaxRoadDist'
 #SPE_INCOME_PER_HA = 'IncomePerHa'
 
 SPE_MIN_POP = 30
 SPE_MIN_IRRIGATED = 3
-SPE_CLUSTER_NUM = 40 #len(set(data.df['Cluster'].dropna()))
+SPE_CLUSTER_NUM = 40
 POP_WATER_FRACTION = 0.7
-AGRI_WATER_FRACTION = 0.4
+AGRI_WATER_FRACTION = 0.3
 POP_REUSED_WATER = 0.9
 AGRI_REUSED_WATER = 0.8
 
@@ -122,17 +131,18 @@ func_variables = {"a": 0,
 module = int(input('Select module: 1) Scenario analysis 2) Graphics 3) Cancel: '))
 
 if module == 1:
-    #specs_path = str(input("Enter the path for the excel file containing all scenarios specifications: "))
-    specs_path = '/Users/camo/Documents/SEE Master/Master Thesis/Python Model/Scenarios.xlsx'
+    # specs_path = str(input("Enter the path for the excel file containing all scenarios specifications: "))
+    specs_path = 'Scenarios.xlsx'
     xls_specs = pd.ExcelFile(specs_path)
     
     input_scenarios = str(input('The following scenarios were found, {}, please write the number of the scenarios that you want to run separated by commas, or type "all" to run all scenarios: '.format(', '.join([str(i + 1) + ') ' + x for i, x in enumerate(xls_specs.sheet_names)]))))
     
     scenarios = multiple_sheet_excel(xls_specs, input_scenarios)
     
-    #treament_systems_path = str(input("Enter the path for the excel file containing all treatment systems specifications: "))
-    pop_treatment_systems_path = '/Users/camo/Documents/SEE Master/Master Thesis/Python Model/Treatment Systems - population.xlsx'
-    agri_treatment_systems_path = '/Users/camo/Documents/SEE Master/Master Thesis/Python Model/Treatment Systems - agriculture.xlsx'
+    pop_treatment_systems_path = 'Treatment Systems - population.xlsx'
+    agri_treatment_systems_path = 'Treatment Systems - agriculture.xlsx'
+    # pop_treatment_systems_path = str(input("Enter the path for the excel file containing all population treatment systems specifications: "))
+    # agri_treatment_systems_path = str(input("Enter the path for the excel file containing all agricultural treatment systems specifications: "))
     
     xls_pop_treatment_systems = pd.ExcelFile(pop_treatment_systems_path)
     xls_agri_treatment_systems = pd.ExcelFile(agri_treatment_systems_path)
@@ -148,34 +158,36 @@ if module == 1:
     if create_dataframe == 1:
     #    dir_files = "/Users/camo/Box Sync/SEE Master/Master Thesis/QGIS Analysis/Output Data/Rescaled 1km"
 ######## Low GWD: ###############
-#        sensitivity_vars = {FN_GWD: -10}
-#        sensitivity_func = 'sum'
+        # sensitivity_vars = {FN_GWD: -10}
+        # sensitivity_func = 'sum'
 ############################################
 ######## High GWD: ###############
-#        sensitivity_vars = {FN_GWD: 10}
-#        sensitivity_func = 'sum'
+        # sensitivity_vars = {FN_GWD: 10}
+        # sensitivity_func = 'sum'
 ############################################
 ######## Low TDS: ###############
-#        sensitivity_vars = {FN_TDS: 0.5}
-#        sensitivity_func = 'times'
+        # sensitivity_vars = {FN_TDS: 0.5}
+        # sensitivity_func = 'times'
 ############################################
 ######## High TDS: ###############
-#        sensitivity_vars = {FN_TDS: 1.5}
-#        sensitivity_func = 'times'
+        # sensitivity_vars = {FN_TDS: 1.5}
+        # sensitivity_func = 'times'
 ############################################
 ######## No sensitivity case: ###############
         sensitivity_vars = {}
         sensitivity_func = None
 ############################################
+        # dir_files = str(input("Enter the path for the folder containing all layers in csv format: "))
+        dir_files = 'Test data'
         cell_area = int(input('Enter the cell area size in km: '))
-        dir_files = str(input("Enter the path for the folder containing all layers in csv format: "))
         file_name = str(input("Enter the name for the file: "))
         main_data = DataFrame(create_dataframe = True, dir_files = dir_files, lyr_names = lyr_names, 
                               file_name = file_name, save_csv = True, cell_area = cell_area, 
                               sensitivity_vars = sensitivity_vars, sensitivity_func = sensitivity_func)
     elif create_dataframe == 2:
+        # file_name = str(input('Enter the name of the input file: '))
+        file_name = 'nwsas_10km_full'
         cell_area = int(input('Enter the cell area size in km: '))
-        file_name = str(input('Enter the name of the input file: '))
         main_data = DataFrame(create_dataframe = False, lyr_names = lyr_names, input_file = file_name, save_csv = False, cell_area = cell_area)
     elif create_dataframe == 3:
         exit()
@@ -199,7 +211,6 @@ if module == 1:
             start_time = time.time()
             clustering = str(specs.loc[0, SPE_CLUSTERING])
             if not all_procedures:
-#                clustering = str(input('Run clustering for the analysis? (y/n): ')).lower()
                 calibrate_pop = str(input('Calibrate urban and rural population? (y/n) (type "all" to run all procedures): ')).lower()
             
             if calibrate_pop == "all":
@@ -298,7 +309,8 @@ if module == 1:
                     osmosis_system = ReverseOsmosis(0.95, 0.85)
                     data.df['GroundwaterSolutes'] = 'NaCl'
                     data.df['GroundwaterTemperature'] = 25
-                    data.reverse_osmosis_energy(region, osmosis_system)
+                    threshold = float(specs.loc[specs[SPE_REGION] == region, SPE_TDS_THRESHOLD])
+                    data.reverse_osmosis_energy(region, threshold, osmosis_system)
             
             
             if calculate_energy_costs == 'y':
@@ -392,6 +404,8 @@ if module == 1:
                                                 class_name_pop, class_name_agri)
     #        data.least_cost_option()
             print('\nCalculating final water extractions and reuse share...')
+            data.get_eto(SPE_ETO, SPE_LAT, SPE_ELEVATION, SPE_WIND, SPE_SRAD, SPE_TMIN, SPE_TMAX, SPE_TAVG)
+            data.get_storage(leakage=0.9, area_percent=0.02, storage_depth=3, agri_water_fraction=AGRI_WATER_FRACTION)
             data.reused_water(percentage_of_reuse = [AGRI_REUSED_WATER, POP_REUSED_WATER], agri_water_fraction = AGRI_WATER_FRACTION)
             
             print('\nCalculating final energy requirements...')
@@ -459,7 +473,7 @@ if module == 1:
     #                        system + 'OPEX')
         
                 print('    - Saving {} scenario dataframe...'.format(scenario))
-                data.df.to_csv(scenario_folder + '/' + scenario + '.csv', index = False)
+                data.df.to_csv(scenario_folder + '/' + scenario + '.gz', index = False)
             
             print('\nPopulation classes:')
             print(set(data.df['PopulationLeastCostTechnology'].dropna()))
@@ -485,12 +499,18 @@ if module == 1:
             
 elif module == 2:
 #    number_of_files = int(input('Enter the amount of files to load: '))
-    folder_path = str(input('Enter the path of the folder with the scenarios: '))
-    admin_names = pd.read_csv('/Users/camo/Documents/SEE Master/Master Thesis/QGIS Analysis/Output Data/NWSAS Admin1 names.csv')
+    # folder_path = str(input('Enter the path of the folder with the scenarios: '))
+    folder_path = 'nwsas_10km_full - Results'
+    admin_names = pd.read_csv('admin1 names.csv')
     admin_names = admin_names.set_index('Province')
 #    folder_path = '/Users/camo/Box Sync/Master Thesis/Python Model/NWSAS_10km - Results'
     os.chdir(folder_path)
-    scenarios = [x[1] for x in os.walk(folder_path)][0]
+    # for root, dirs, files in os.walk('.', topdown=False):
+        # for name in files:
+           # print(os.path.join(root, name))
+        # for name in dirs:
+           # print(os.path.join(root, name))
+    scenarios = [x[1] for x in os.walk('.')][0]
     is_baseline = int(input('Select the scenario from which the baseline will be extracted:\n    {}\nInput: '.format('\n    '.join([str(i + 1) + ') ' + x for i, x in enumerate(scenarios)]))))
     data_list = []
     cluster = {}
@@ -502,12 +522,12 @@ elif module == 2:
     for scenario in scenarios:
 #        file_name = str(input('Enter the path of the input file: '))
         print('\nLoading {} scenario...'.format(scenario))
-        os.chdir(folder_path + '/' + scenario)
+        os.chdir(scenario)
         file_name = glob.glob("*.csv")
         file_name = file_name[0].split('.')[0]
         data_list.append(DataFrame(create_dataframe = False, lyr_names = lyr_names, input_file = file_name, save_csv = False,  cell_area = cell_area))
-    
-    os.chdir(folder_path)
+        os.chdir('..')
+        
     #scenarios_name = str(input('Enter the names of the scenarios: '))
     #scenarios_name = 'Baseline, Water reuse \n(clustering), Water reuse \n(by province)'
 #    scenarios_name = 'Baseline, Water reuse \n(by province), Water reuse \n(per cluster)'   
@@ -518,6 +538,7 @@ elif module == 2:
     energy_start = (scenarios_name[0], data_list[is_baseline - 1].df[['IrrigationDesalinationEnergy', 'IrrigationPumpingEnergy']].sum())
     gws_start = data_list[is_baseline - 1].df['TotalWithdrawals'].sum() / \
                 (data_list[is_baseline - 1].df.loc[data_list[is_baseline - 1].df['CI'] == 1,'RechargeRate'].sum() - data_list[is_baseline - 1].df.loc[data_list[is_baseline - 1].df['CI'] == 1,'EnvironmentalFlow'].sum())
+    
     energy_per_cluster = []
     energy_end = {}
     #scenarios_name[i]: energy_start
@@ -544,12 +565,14 @@ elif module == 2:
     withdrawals_total['Baseline'] = withdrawals_baseline[scenarios_name[is_baseline]]
     
 #    sensitivity_path = str(input('Enter the path of the folder with the scenarios: '))
-    sensitivity_path = {'TDS': '/Users/camo/Documents/SEE Master/Master Thesis/Python Model/NWSAS_1km_sensitivity_TDS',
-                        'Depth': '/Users/camo/Documents/SEE Master/Master Thesis/Python Model/NWSAS_1km_sensitivity_Depth'}
+    sensitivity_path = {'TDS': 'nwsas_10km_tds_sensitivity',
+                        'Depth': 'nwsas_10km_gwd_sensitivity'}
     sensitivity_variables = {}
+    os.chdir('..')
     for key, value in sensitivity_path.items():
         os.chdir(value)
-        sensitivity_variables[key] = [x[1] for x in os.walk(value)][0]    
+        sensitivity_variables[key] = [x[1] for x in os.walk('.')][0]  
+        os.chdir('..')
     data_list.clear()
     sensitivity_energy = {}
     
@@ -561,7 +584,7 @@ elif module == 2:
             print('\nLoading {} sensitivity for {} scenario...'.format(key,scenario))
             for value in item:
                 os.chdir(sensitivity_path[key] + '/' + value + '/' + scenario)
-                file_name = glob.glob("*.csv")
+                file_name = glob.glob("*.gz")
                 file_name = file_name[0].split('.')[0]
                 sensitivity_data = DataFrame(create_dataframe = False, lyr_names = lyr_names, input_file = file_name, save_csv = False,  cell_area = cell_area)
                 sensitivity_energy[scenario.replace('- ','\n')] = sensitivity_energy[scenario.replace('- ','\n')].append(pd.DataFrame({'Desalination energy': sensitivity_data.df.agg({'FinalDesalinationEnergy': 'sum'}).values,
@@ -590,6 +613,8 @@ elif module == 2:
                 sensitivity_energy[scenario.replace('- ','\n')].loc[boolean_vec, 'Pumping energy'] = None
                 boolean_vec = sensitivity_energy[scenario.replace('- ','\n')].duplicated(subset=['Treatment energy'], keep=False)
                 sensitivity_energy[scenario.replace('- ','\n')].loc[boolean_vec, 'Treatment energy'] = None
+                os.chdir('../../..')
+                
         
     class_name_pop = {'0': 'NaN', '1': 'Extended aeration', '2': 'Membrane bioreactor',
                       '3': 'Sequencing batch reactor', '4': 'Rotating biological contractors',
@@ -597,7 +622,8 @@ elif module == 2:
                       '7': 'Moving bed biofilm reactor'}
     class_name_agri = {'0': 'NaN', '1': 'Pond system', '2': 'Wetlands'}
     
-    order = ['Baseline','WWR FreeWapha *','WWR SubWapha *','WWR PrivWapha *','WWR HighWapc *','WWR LowWapc *','WWR per cluster','WWR by province']
+    # order = ['Baseline','WWR FreeWapha *','WWR SubWapha *','WWR PrivWapha *','WWR HighWapc *','WWR LowWapc *','WWR per cluster','WWR by province']
+    order = ['Baseline','WWR by province', 'WWR per cluster']
     
     os.chdir(folder_path)
     gws_plot(gws_values, scenarios_name, order)
@@ -611,23 +637,23 @@ elif module == 2:
 ##    save_layers(path, centroids, 'Centroid') 
 #    save_layers(path, data_list[1].df, 'IrrigatedArea')
     
-for scenario in order[1:]:
-    sensTDS = sensitivity_energy[scenario].loc[sensitivity_energy[scenario]['SensitivityVar'] == 'TDS','Desalination energy']
-    enerTDS = energy_end[scenario].loc['Desalination energy']
-    
-    sensDepth = sensitivity_energy[scenario].loc[sensitivity_energy[scenario]['SensitivityVar'] == 'Depth','Pumping energy']
-    enerDepth = energy_end[scenario].loc['Pumping energy']
-    
-    enerTreat = energy_end[scenario].loc['Treatment energy']
-    
-    print(scenario + ': \n    - Desalination energy: ' +
-          str(round((sensTDS[1] - enerDepth - enerTreat - enerTDS)/enerTDS * 100,2)) + '% to ' +
-          str(round((sensTDS[0] - enerDepth - enerTreat - enerTDS)/enerTDS* 100,2)) + '%')
-    
-    print('    - Pumping energy: ' +
-          str(round((sensDepth[3] - enerDepth - enerTreat)/enerDepth *100,2)) + '% to ' +
-          str(round((sensDepth[2] - enerDepth - enerTreat)/enerDepth *100,2)) + '%')
-    print('')
+    for scenario in order[1:]:
+        sensTDS = sensitivity_energy[scenario].loc[sensitivity_energy[scenario]['SensitivityVar'] == 'TDS','Desalination energy']
+        enerTDS = energy_end[scenario].loc['Desalination energy']
+        
+        sensDepth = sensitivity_energy[scenario].loc[sensitivity_energy[scenario]['SensitivityVar'] == 'Depth','Pumping energy']
+        enerDepth = energy_end[scenario].loc['Pumping energy']
+        
+        enerTreat = energy_end[scenario].loc['Treatment energy']
+        
+        print(scenario + ': \n    - Desalination energy: ' +
+              str(round((sensTDS[1] - enerDepth - enerTreat - enerTDS)/enerTDS * 100,2)) + '% to ' +
+              str(round((sensTDS[0] - enerDepth - enerTreat - enerTDS)/enerTDS* 100,2)) + '%')
+        
+        print('    - Pumping energy: ' +
+              str(round((sensDepth[3] - enerDepth - enerTreat)/enerDepth *100,2)) + '% to ' +
+              str(round((sensDepth[2] - enerDepth - enerTreat)/enerDepth *100,2)) + '%')
+        print('')
     
 
 
