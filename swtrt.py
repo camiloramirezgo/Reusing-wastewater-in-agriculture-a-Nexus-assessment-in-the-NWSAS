@@ -327,7 +327,7 @@ class DataFrame:
         self.df['PopulationReclaimedWater'] = None
         self.df['IrrigationReclaimedWater'] = None
         self.df['PopulationReclaimedWater'] = self.df['PopulationWaterPerCluster'].dropna() * pop_water_fraction
-        self.df['IrrigationReclaimedWater'] = self.df['IrrigationWaterPerCluster'].dropna() * agri_water_fraction
+        # self.df['IrrigationReclaimedWater'] = self.df['IrrigationWaterPerCluster'].dropna() * agri_water_fraction
         self.df['PopulationFutureReclaimedWater'] = None
         self.df['IrrigationFutureReclaimedWater'] = None
         self.df['PopulationFutureReclaimedWater'] = self.df['PopulationWaterPerCluster'].dropna() * pop_water_fraction * pop_growth
@@ -454,7 +454,7 @@ class DataFrame:
     def calculate_opex(self, treatment_system_name, treatment_system, values,
                         water_fraction, parameter, variable, years):
         """
-        Calculates the CAPEX for each treatment technology in each cluster 
+        Calculates the OPEX for each treatment technology in each cluster 
         """
         if variable == 'Population':
             growth = 'PopulationGrowthPerCluster'
@@ -463,7 +463,7 @@ class DataFrame:
         
         year = np.arange(years + 1)
         population = np.array([x * (1 + y)**year for x, y in np.array(self.df[['PopulationPerCluster', growth]].dropna())])
-        water = np.array([x * water_fraction * (1 + y)**year for x, y in np.array(self.df[[variable + 'WaterPerCluster', growth]].dropna())])
+        water = np.array([x  * (1 + y)**year for x, y in np.array(self.df[[variable + 'ReclaimedWater', growth]].dropna())])
         func = create_function(treatment_system, parameter, values)
          
         return eval(func)
@@ -478,7 +478,7 @@ class DataFrame:
         func = create_function(treatment_system, parameter, values)
         self.df[treatment_system_name] = self.df['Cluster'].map(eval(func).iloc[:,0])
     
-    def calculate_lcow_capex(self, variable, investment_var, water_var, water_fraction,
+    def calculate_lcow_capex(self, variable, investment_var, water_var,
                              degradation_factor, income_tax_factor, future_var, years, discount_rate):
         """
         Calculates the levelised cost of water for the capex
@@ -500,12 +500,14 @@ class DataFrame:
         self.df[investment_var + '_LCOW'] = None
 #        self.df.loc[self.df[variable + 'ReclaimedWater'].notna(), investment_var + '_LCOW'] = income_tax_factor * self.df[investment_var].dropna() / \
 #                                            (capacity * sum((1 - degradation_factor)**(year) * discount_factor))
-        self.df.loc[self.df[variable + 'ReclaimedWater'].notna(), investment_var + '_LCOW'] = income_tax_factor * self.df[investment_var].dropna() / \
-                                            (np.array([sum(x * discount_factor) for x in water]))
         
-    
-    def calculate_lcow_opex(self, variable, op_cost_var, water_var, water_fraction,
-                            degradation_factor, present_var, future_var, years, discount_rate, opex_data):
+        a = self.df.loc[self.df[variable + 'ReclaimedWater'].notna(), investment_var].dropna()
+        b = np.array([sum(x * discount_factor) for x in water])
+        self.df.loc[self.df[variable + 'ReclaimedWater'].notna(), investment_var + '_LCOW'] = income_tax_factor * np.divide(a, b, out=np.zeros_like(a), where=b!=0)
+        
+        
+    def calculate_lcow_opex(self, variable, op_cost_var, water_var, degradation_factor, 
+                            present_var, future_var, years, discount_rate, opex_data):
         """
         Calculates the levelised cost of water for the opex
         """                    
@@ -562,13 +564,7 @@ class DataFrame:
             class_name[system] = dic_1[system[0]] + ', ' + dic_2[system[1]]
         return class_name
     
-    def potential_reused_water(self):
-        """
-        Calculates the potential reused water substracting losses
-        """
-        return self.df.groupby('Cluster').agg({'IrrigationReclaimedWater': 'first','PopulationReclaimedWater': 'first'})
-    
-    def get_storage(self, leakage, area_percent, storage_depth, agri_water_fraction):
+    def get_storage(self, leakage, area_percent, storage_depth, agri_water_req, agri_non_recoverable):
         """
         Calculate the losses in the on-farm storage through the year, based on
         a water balance (leakage + evaporation)
@@ -582,32 +578,36 @@ class DataFrame:
         storage_depth : float
             Depth of the on-farm storage in meters.
         """
-        not_na = self.df['IrrigationReclaimedWater'].notna()
+        not_na = self.df['IrrigationWaterPerCluster'].notna()
+        self.df.loc[not_na, 'AgWaterReq'] = agri_water_req
         self.df.loc[not_na, 'available_storage'] = area_percent  * storage_depth * self.df.loc[not_na, 'IrrigatedArea'] * 10000
         self.df.loc[not_na, 'leakage_month'] = (leakage / 1000) * 30 * area_percent * self.df.loc[not_na, 'IrrigatedArea'] * 10000
-        # self.df['storage'] = 0
+        recoverable_water = (self.df.loc[not_na, 'IrrigationWater'] - (self.df.loc[not_na, 'AgWaterReq'] * self.df.loc[not_na, 'IrrigatedArea']/(1-agri_non_recoverable)))
+        recoverable_water[recoverable_water<0] = 0
         for i in range(1,13):
-            self.df.loc[not_na, f'stored_{i}'] = self.df.loc[not_na, 'IrrigationWater'] * agri_water_fraction / 12 - \
+            self.df.loc[not_na, f'stored_{i}'] = recoverable_water / 12 - \
                                       (self.df.loc[not_na, 'leakage_month'] + \
                                       ((self.df.loc[not_na, f'eto_{i}'] / 1000) * area_percent * self.df.loc[not_na, 'IrrigatedArea'] * 10000))
+            self.df.loc[not_na & (self.df[f'stored_{i}']<0), f'stored_{i}'] = 0
             self.df.loc[not_na, f'stored_percentage_{i}'] = self.df.loc[not_na, f'stored_{i}'] / self.df.loc[not_na, 'available_storage']
             self.df.loc[not_na & (self.df[ f'stored_percentage_{i}'] > 1), f'stored_{i}'] = self.df.loc[not_na & (self.df[ f'stored_percentage_{i}'] > 1), 'available_storage']
     
-    def reused_water(self, percentage_of_reuse, agri_water_fraction):
+    def reused_water(self, pop_percentage_of_reuse):
         """
         Calculates the total final amount of water extracted for irrigation after reuse
         """
         self.df['IrrigationReusedWater'] = self.df.filter(regex='stored_[1-9]').sum(axis=1)
+        self.df['IrrigationReclaimedWater'] = self.df.set_index('Cluster').index.map(self.df.groupby('Cluster')['IrrigationReusedWater'].sum())
         self.df['FinalIrrigationWater'] = 0
-        not_na = self.df['IrrigationReclaimedWater'].notna()
+        not_na = self.df['IrrigationWaterPerCluster'].notna()
         self.df.loc[not_na, 'FinalIrrigationWater'] = self.df.loc[not_na, 'IrrigationWater'] - self.df.loc[not_na, 'IrrigationReusedWater']
         self.losses = 0
         self.df['PopulationReusedWater'] = 0
         for cluster in set(self.df['Cluster'].dropna()):
             is_cluster = self.is_region(cluster, 'Cluster')
-            count = self.df.loc[is_cluster, 'IrrigationReclaimedWater'].dropna().count()
+            count = self.df.loc[is_cluster, 'IrrigationWaterPerCluster'].dropna().count()
                 
-            pop_water = self.df.loc[is_cluster, 'PopulationReclaimedWater'].dropna().mean() * percentage_of_reuse[1]
+            pop_water = self.df.loc[is_cluster, 'PopulationReclaimedWater'].dropna().mean() * pop_percentage_of_reuse
             while (count > 0) and (pop_water > 0):
                 self.df.loc[(is_cluster) & (not_na) & (self.df['FinalIrrigationWater'] > 0), 'FinalIrrigationWater'] -= (pop_water / count)
                 self.df.loc[(is_cluster) & (not_na) & (self.df['FinalIrrigationWater'] > 0), 'PopulationReusedWater'] += (pop_water / count)
@@ -844,11 +844,11 @@ def calculate_lcows(data, clusters, variable, water_fraction, degradation_factor
 #                for cluster in set(data.df['Cluster'].dropna()):
 #                    print('    - Cluster {} of {}...'.format(int(cluster) + 1, clusters))
                 data.calculate_lcow_capex(variable = variable, investment_var = name + 'CAPEX', 
-                                         water_var = variable + 'Water', water_fraction = water_fraction,
+                                         water_var = variable + 'Water',
                                          degradation_factor = degradation_factor, income_tax_factor = income_tax_factor, 
                                          future_var = variable_present + 'Future', years = years, discount_rate = discount_rate)
                 data.calculate_lcow_opex(variable = variable, op_cost_var = name + 'OPEX', 
-                                         water_var = variable + 'Water', water_fraction = water_fraction,
+                                         water_var = variable + 'Water',
                                          degradation_factor = degradation_factor, present_var = variable_present, 
                                          future_var = variable_present + 'Future', years = years, discount_rate = discount_rate,
                                          opex_data = opex_data[name])

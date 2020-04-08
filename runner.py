@@ -78,9 +78,10 @@ SPE_MIN_POP = 30
 SPE_MIN_IRRIGATED = 3
 SPE_CLUSTER_NUM = 40
 POP_WATER_FRACTION = 0.7
-AGRI_WATER_FRACTION = 0.3
 POP_REUSED_WATER = 0.9
-AGRI_REUSED_WATER = 0.8
+AGRI_WATER_FRACTION = 0.3
+AGRI_NON_RECOVERABLE = 0.2
+AGRI_WATER_REQ = 8500
 
 lyr_names = {"Region": FN_REGION,
              "X": FN_X_COORDINATE,
@@ -186,7 +187,7 @@ if module == 1:
                               sensitivity_vars = sensitivity_vars, sensitivity_func = sensitivity_func)
     elif create_dataframe == 2:
         # file_name = str(input('Enter the name of the input file: '))
-        file_name = 'nwsas_10km_full'
+        file_name = 'nwsas_10km_low_tds'
         cell_area = int(input('Enter the cell area size in km: '))
         main_data = DataFrame(create_dataframe = False, lyr_names = lyr_names, input_file = file_name, save_csv = False, cell_area = cell_area)
     elif create_dataframe == 3:
@@ -355,13 +356,19 @@ if module == 1:
                 data.calculate_per_cluster(cluster, 'PopulationWater', 'PopulationFuture', SPE_MIN_POP)
                 data.calculate_per_cluster(cluster, 'IrrigationWater', 'IrrigatedArea', SPE_MIN_IRRIGATED)
             
+            print('\nCalculating final water extractions and reuse share...')
+            data.calculate_reclaimed_water(POP_WATER_FRACTION, AGRI_WATER_FRACTION)
+            data.get_eto(SPE_ETO, SPE_LAT, SPE_ELEVATION, SPE_WIND, SPE_SRAD, SPE_TMIN, SPE_TMAX, SPE_TAVG)
+            data.get_storage(leakage=0.9, area_percent=0.02, storage_depth=3, agri_water_req=AGRI_WATER_REQ, agri_non_recoverable=AGRI_NON_RECOVERABLE)
+            data.reused_water(pop_percentage_of_reuse = POP_REUSED_WATER)
+            
             if calculate_treatment == 'y':
                 years = float(specs.loc[0, SPE_END_YEAR] - specs.loc[0, SPE_START_YEAR])
                 data.df['PopulationGrowthPerCluster'] = (data.df['PopulationFuturePerCluster'] / \
                                                          data.df['PopulationPerCluster'])**(1./years) - 1
                 data.df['IrrigatedGrowthPerCluster'] = (data.df['IrrigatedAreaFuturePerCluster'] / \
                                                          data.df['IrrigatedAreaPerCluster'])**(1./years) - 1
-                data.calculate_reclaimed_water(POP_WATER_FRACTION, AGRI_WATER_FRACTION)
+                
                 data.population_opex = {}
                 for name, system in treatment_systems_pop.items():
                     print('\nCalculating {} treatment system CAPEX, OPEX and energy requirements...'.format(name))
@@ -403,10 +410,6 @@ if module == 1:
             class_name = data.least_cost_system(['PopulationLeastCostTechnology','IrrigationLeastCostTechnology'],
                                                 class_name_pop, class_name_agri)
     #        data.least_cost_option()
-            print('\nCalculating final water extractions and reuse share...')
-            data.get_eto(SPE_ETO, SPE_LAT, SPE_ELEVATION, SPE_WIND, SPE_SRAD, SPE_TMIN, SPE_TMAX, SPE_TAVG)
-            data.get_storage(leakage=0.9, area_percent=0.02, storage_depth=3, agri_water_fraction=AGRI_WATER_FRACTION)
-            data.reused_water(percentage_of_reuse = [AGRI_REUSED_WATER, POP_REUSED_WATER], agri_water_fraction = AGRI_WATER_FRACTION)
             
             print('\nCalculating final energy requirements...')
             data.calculate_final_energy(class_name_pop, class_name_agri)
@@ -510,8 +513,12 @@ elif module == 2:
            # print(os.path.join(root, name))
         # for name in dirs:
            # print(os.path.join(root, name))
-    scenarios = [x[1] for x in os.walk('.')][0]
+    scenarios = np.array([x[1] for x in os.walk('.')][0])
+    input_scenarios = str(input('The following scenarios were found, {}, please write the number of the scenarios that you want to plot separated by commas: '.format(', '.join([str(i + 1) + ') ' + x for i, x in enumerate(scenarios)]))))
+    scenarios = scenarios[[int(x)-1 for x in input_scenarios.split(',')]]
+    print(scenarios)
     is_baseline = int(input('Select the scenario from which the baseline will be extracted:\n    {}\nInput: '.format('\n    '.join([str(i + 1) + ') ' + x for i, x in enumerate(scenarios)]))))
+    keep_scenario = input('Plot the {} scenario too?(y/n): '.format(scenarios[is_baseline-1]))
     data_list = []
     cluster = {}
     cell_area = int(input('Enter the cell area size in km: '))
@@ -523,7 +530,7 @@ elif module == 2:
 #        file_name = str(input('Enter the path of the input file: '))
         print('\nLoading {} scenario...'.format(scenario))
         os.chdir(scenario)
-        file_name = glob.glob("*.csv")
+        file_name = glob.glob("*.gz")
         file_name = file_name[0].split('.')[0]
         data_list.append(DataFrame(create_dataframe = False, lyr_names = lyr_names, input_file = file_name, save_csv = False,  cell_area = cell_area))
         os.chdir('..')
@@ -623,7 +630,17 @@ elif module == 2:
     class_name_agri = {'0': 'NaN', '1': 'Pond system', '2': 'Wetlands'}
     
     # order = ['Baseline','WWR FreeWapha *','WWR SubWapha *','WWR PrivWapha *','WWR HighWapc *','WWR LowWapc *','WWR per cluster','WWR by province']
-    order = ['Baseline','WWR by province', 'WWR per cluster']
+    # order = ['Baseline','WWR by province','WWR per cluster']
+    
+    if keep_scenario == 'n':
+        gws_values.pop(is_baseline)
+        scenario = scenarios_name.pop(is_baseline)
+        energy_end.pop(scenario)
+        sensitivity_energy.pop(scenario)
+        withdrawals_total.pop(scenario)
+        withdrawals_per_cluster.pop(scenario)
+        tech.pop(scenario)
+    order = scenarios_name
     
     os.chdir(folder_path)
     gws_plot(gws_values, scenarios_name, order)
