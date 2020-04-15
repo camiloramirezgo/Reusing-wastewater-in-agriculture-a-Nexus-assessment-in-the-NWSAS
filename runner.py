@@ -81,7 +81,7 @@ POP_WATER_FRACTION = 0.7
 POP_REUSED_WATER = 0.9
 AGRI_WATER_FRACTION = 0.3
 AGRI_NON_RECOVERABLE = 0.2
-AGRI_WATER_REQ = 8500
+AGRI_WATER_REQ = 'AgWaterReq'
 
 lyr_names = {"Region": FN_REGION,
              "X": FN_X_COORDINATE,
@@ -179,7 +179,7 @@ if module == 1:
         sensitivity_func = None
 ############################################
         # dir_files = str(input("Enter the path for the folder containing all layers in csv format: "))
-        dir_files = 'Test data'
+        dir_files = 'Input data'
         cell_area = int(input('Enter the cell area size in km: '))
         file_name = str(input("Enter the name for the file: "))
         main_data = DataFrame(create_dataframe = True, dir_files = dir_files, lyr_names = lyr_names, 
@@ -187,7 +187,7 @@ if module == 1:
                               sensitivity_vars = sensitivity_vars, sensitivity_func = sensitivity_func)
     elif create_dataframe == 2:
         # file_name = str(input('Enter the name of the input file: '))
-        file_name = 'nwsas_10km_low_tds'
+        file_name = 'nwsas_1km_low_gwd'
         cell_area = int(input('Enter the cell area size in km: '))
         main_data = DataFrame(create_dataframe = False, lyr_names = lyr_names, input_file = file_name, save_csv = False, cell_area = cell_area)
     elif create_dataframe == 3:
@@ -195,6 +195,7 @@ if module == 1:
     
     run_all = 0
     all_procedures = False
+    start_time = time.time()
     for scenario, specs in scenarios.items():
         data = DataFrame(empty = True)
         data.copy(main_data)
@@ -209,7 +210,6 @@ if module == 1:
         
         if choice == 1:
             print("\n------------------------------\nRunning {} scenario\n------------------------------".format(scenario))
-            start_time = time.time()
             clustering = str(specs.loc[0, SPE_CLUSTERING])
             if not all_procedures:
                 calibrate_pop = str(input('Calibrate urban and rural population? (y/n) (type "all" to run all procedures): ')).lower()
@@ -493,17 +493,19 @@ if module == 1:
     #        class_name_option['-1'] = 'GroundwaterExtraction'
     #        print(class_name_option)
             
-            end_time = time.time()
-            print('\nTotal enlapsed time')
-            print(str(np.floor((end_time - start_time) / 60)) + ' min, ' + str(round((end_time - start_time) % 60, 2)) + ' sec')
-            
         elif choice == 3:
             print("\n...")
+            
+    end_time = time.time()
+    minutes = np.floor((end_time - start_time) / 60)
+    print('\nTotal enlapsed time')
+    print(str(int(minutes // 60)) + ' hours, ' + str(int(minutes % 60)) + ' min, ' + str(round((end_time - start_time) % 60, 2)) + ' sec')
+
             
 elif module == 2:
 #    number_of_files = int(input('Enter the amount of files to load: '))
     # folder_path = str(input('Enter the path of the folder with the scenarios: '))
-    folder_path = 'nwsas_10km_full - Results'
+    folder_path = 'nwsas_1km_data - Results'
     admin_names = pd.read_csv('admin1 names.csv')
     admin_names = admin_names.set_index('Province')
 #    folder_path = '/Users/camo/Box Sync/Master Thesis/Python Model/NWSAS_10km - Results'
@@ -572,8 +574,8 @@ elif module == 2:
     withdrawals_total['Baseline'] = withdrawals_baseline[scenarios_name[is_baseline]]
     
 #    sensitivity_path = str(input('Enter the path of the folder with the scenarios: '))
-    sensitivity_path = {'TDS': 'nwsas_10km_tds_sensitivity',
-                        'Depth': 'nwsas_10km_gwd_sensitivity'}
+    sensitivity_path = {'TDS': 'nwsas_1km_tds_sensitivity',
+                        'Depth': 'nwsas_1km_gwd_sensitivity'}
     sensitivity_variables = {}
     os.chdir('..')
     for key, value in sensitivity_path.items():

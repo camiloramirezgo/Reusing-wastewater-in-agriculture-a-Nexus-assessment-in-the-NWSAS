@@ -17,13 +17,14 @@ variables = {'gwd': {'sensitivity_vars': {'low': -10,
                      'sensitivity_func': 'times'}}
 names = {'gwd': FN_GWD, 'tds': FN_TDS}
 
-df = pd.read_csv('nwsas_10km_full' + '.gz')
+df = pd.read_csv('nwsas_1km_data' + '.gz')
 for variable, values in variables.items():
     for level, value in values['sensitivity_vars'].items():
-        file_name = f'nwsas_10km_{level}_{variable}'
+        file_name = f'nwsas_1km_{level}_{variable}'
         dff = df.copy()
         if values['sensitivity_func'] == 'sum':
             dff.loc[dff[names[variable]] > -value, names[variable]] += value
         elif values['sensitivity_func'] == 'times':
             dff[names[variable]] *= value
         dff.to_csv(file_name + ".gz", index = False)    
+        

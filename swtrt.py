@@ -27,6 +27,7 @@ import math
 math.exp = np.exp
 math.pow = np.power
 math.sqrt = np.sqrt
+math.log = np.log
 
 class DataFrame:
     """
@@ -345,12 +346,12 @@ class DataFrame:
         extraterrestrialRad = [pyeto.et_rad(x, solarDeclination,y,ird) for 
                                x, y in zip(latitude,sha)]
         clearSkyRad = pyeto.cs_rad(elev,extraterrestrialRad)
-        netInSolRadnet = pyeto.net_in_sol_rad(srad*0.001, albedo=0.065)
+        netInSolRadnet = pyeto.net_in_sol_rad(srad*0.001, albedo=0.05)
         netOutSolRadnet = pyeto.net_out_lw_rad(tmin, tmax, srad*0.001, clearSkyRad, 
                                                atmosphericVapourPressure)
         netRadiation = pyeto.net_rad(netInSolRadnet,netOutSolRadnet)
         tempKelvin = pyeto.celsius2kelvin(tavg)
-        windSpeed2m = wind
+        windSpeed2m = pyeto.wind_speed_2m(wind, 10)
         slopeSvp = pyeto.delta_svp(tavg)
         atmPressure = pyeto.atm_pressure(elev)
         psyConstant = pyeto.psy_const(atmPressure)
@@ -358,7 +359,7 @@ class DataFrame:
         return self.fao56_penman_monteith(netRadiation, tempKelvin, windSpeed2m, 
                                           saturationVapourPressure, 
                                           atmosphericVapourPressure,
-                                          slopeSvp, psyConstant)
+                                          slopeSvp, psyConstant, 0.002, 0)
 
     def get_eto(self, eto, lat, elevation, wind, srad, tmin, tmax, tavg):
         '''
@@ -375,7 +376,7 @@ class DataFrame:
                                                               self.df['{}_{}'.format(tavg, i)],
                                                               i) * 30
     
-    def fao56_penman_monteith(self, net_rad, t, ws, svp, avp, delta_svp, psy, shf=0.0):
+    def fao56_penman_monteith(self, net_rad, t, ws, svp, avp, delta_svp, psy, h, rs=70, shf=0.0):
         """
         Estimate reference evapotranspiration (ETo) from a hypothetical
         short grass reference surface using the FAO-56 Penman-Monteith equation.
@@ -401,10 +402,12 @@ class DataFrame:
             grass reference surface [mm day-1].
         :rtype: float
         """
+        ra_constant = math.log((2-2/3*h)/(0.123*h))*math.log((2-2/3*h)/(0.1*0.123*h))/(0.41**2)
+        constant = 86400 * 0.622 / (1.01*0.287*ra_constant)
         a1 = (0.408 * (net_rad - shf) * delta_svp /
-              (delta_svp + (psy * (1 + 0.34 * ws))))
-        a2 = (900 * ws / t * (svp - avp) * psy /
-              (delta_svp + (psy * (1 + 0.34 * ws))))
+              (delta_svp + (psy * (1 + (rs / ra_constant) * ws))))
+        a2 = (constant * ws / t * (svp - avp) * psy /
+              (delta_svp + (psy * (1 + (rs / ra_constant) * ws))))
         return a1 + a2
     
     def calculate_capex(self, treatment_system_name, treatment_system, values,
@@ -523,8 +526,9 @@ class DataFrame:
 #        opex = opex_data / water
         
         self.df[op_cost_var + '_LCOW'] = None
-        self.df.loc[self.df[growth].notna(), op_cost_var + '_LCOW'] = np.array([sum(x * discount_factor) for x in opex_data]) / \
-                                            (np.array([sum(x * discount_factor) for x in water]))
+        a = np.array([sum(x * discount_factor) for x in opex_data])
+        b = np.array([sum(x * discount_factor) for x in water])
+        self.df.loc[self.df[growth].notna(), op_cost_var + '_LCOW'] = np.divide(a, b, out=np.zeros_like(a), where=b!=0)
         
     
     def calculate_lcow(self, name):
@@ -579,10 +583,10 @@ class DataFrame:
             Depth of the on-farm storage in meters.
         """
         not_na = self.df['IrrigationWaterPerCluster'].notna()
-        self.df.loc[not_na, 'AgWaterReq'] = agri_water_req
+        # self.df.loc[not_na, 'AgWaterReq'] = agri_water_req
         self.df.loc[not_na, 'available_storage'] = area_percent  * storage_depth * self.df.loc[not_na, 'IrrigatedArea'] * 10000
         self.df.loc[not_na, 'leakage_month'] = (leakage / 1000) * 30 * area_percent * self.df.loc[not_na, 'IrrigatedArea'] * 10000
-        recoverable_water = (self.df.loc[not_na, 'IrrigationWater'] - (self.df.loc[not_na, 'AgWaterReq'] * self.df.loc[not_na, 'IrrigatedArea']/(1-agri_non_recoverable)))
+        recoverable_water = (self.df.loc[not_na, 'IrrigationWater'] - (self.df.loc[not_na, agri_water_req] * self.df.loc[not_na, 'IrrigatedArea']/(1-agri_non_recoverable)))
         recoverable_water[recoverable_water<0] = 0
         for i in range(1,13):
             self.df.loc[not_na, f'stored_{i}'] = recoverable_water / 12 - \
@@ -1084,7 +1088,7 @@ def water_plot(withdrawals_total, order):
         highs['label_pos'] = highs['value']/2
         highs.loc[highs['variable'] == 'Irrigation extractions','label_pos'] = highs['value'].sum() - highs['value']/2
         lows['label_pos'] = lows['value']/2
-        lows.loc[lows['variable'] == 'Irrigation reused water','label_pos'] = lows['value'].sum() - lows['value']/2
+        lows.loc[lows['variable'] == 'Reused water from irrigation','label_pos'] = lows['value'].sum() - lows['value']/2
         if min(lows['value']) < min_low:
             min_low = min(lows['value'])
         lows['percentage_pos'] = min_low/10
