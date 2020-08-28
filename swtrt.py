@@ -623,24 +623,25 @@ class DataFrame:
         self.df['FinalWaterWithdrawals'] = self.df[['FinalIrrigationWater', 'PopulationWater']].sum(axis=1)
 
     def get_water_stats(self):
-        withdrawals_per_cluster = self.df.groupby('Cluster').agg({
+        df = self.df.loc[self.df.Cluster.notna()]
+        withdrawals_per_cluster = df.groupby('Cluster').agg({
                                     'FinalWaterWithdrawals': 'sum', 
                                     'TotalWithdrawals': 'sum', 
                                     'IrrigationReusedWater': 'sum', 
                                     'PopulationReusedWater': 'sum',
                                     'PopulationWater': 'sum',
                                     'FinalIrrigationWater': 'sum'})
-        withdrawals_total = pd.DataFrame({'Irrigation extractions': self.df['FinalIrrigationWater'].sum(),
-                                          'Population extractions': self.df['PopulationWater'].sum(),
-                                          'Reused water from irrigation': self.df['IrrigationReusedWater'].sum(),
-                                          'Reused water from population': self.df['PopulationReusedWater'].sum(),
-                                          'Final withdrawals': self.df['FinalWaterWithdrawals'].sum(),
-                                          'Baseline withdrawals': self.df['TotalWithdrawals'].sum()}, index=[0])
-        withdrawals_baseline = pd.DataFrame({'Irrigation extractions': self.df['IrrigationWater'].sum(),
-                                          'Population extractions': self.df['PopulationWater'].sum(),
+        withdrawals_total = pd.DataFrame({'Irrigation extractions': df['FinalIrrigationWater'].sum(),
+                                          'Population extractions': df['PopulationWater'].sum(),
+                                          'Reused water from irrigation': df['IrrigationReusedWater'].sum(),
+                                          'Reused water from population': df['PopulationReusedWater'].sum(),
+                                          'Final withdrawals': df['FinalWaterWithdrawals'].sum(),
+                                          'Baseline withdrawals': df['TotalWithdrawals'].sum()}, index=[0])
+        withdrawals_baseline = pd.DataFrame({'Irrigation extractions': df['IrrigationWater'].sum(),
+                                          'Population extractions': df['PopulationWater'].sum(),
                                           'Reused water from irrigation': 0,
                                           'Reused water from population': 0,
-                                          'Baseline withdrawals': self.df['TotalWithdrawals'].sum()}, index=[0])
+                                          'Baseline withdrawals': df['TotalWithdrawals'].sum()}, index=[0])
 #        reused_per_cluster = (withdrawals_per_cluster['TotalWithdrawals'].subtract(withdrawals_per_cluster['FinalWaterWithdrawals'])) / withdrawals_per_cluster['TotalWithdrawals']
 #        reused_global = (self.df['TotalWithdrawals'].subtract(self.df['FinalWaterWithdrawals']).sum()) / self.df['TotalWithdrawals'].sum()
         
@@ -986,7 +987,7 @@ def gws_plot(gws_values, names, order):
                axis_title_y=element_text(color='black'))
         )
 #    print(p)
-    p.save('GWS.pdf', height=5, width=4)
+    p.save('GWS.pdf', height=4, width=2.5)
     
 def energy_plot(energy_start, energy_end, sensitivity_energy, order):
     energy_start[1].index = ['Desalination energy', 'Pumping energy']

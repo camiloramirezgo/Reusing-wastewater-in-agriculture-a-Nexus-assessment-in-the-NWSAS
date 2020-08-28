@@ -544,8 +544,9 @@ elif module == 2:
     scenarios_name = ['Baseline']
     scenarios_name.extend([x.replace('- ','\n') for x in scenarios])
     
-    energy_start = (scenarios_name[0], data_list[is_baseline - 1].df[['IrrigationDesalinationEnergy', 'IrrigationPumpingEnergy']].sum())
-    gws_start = data_list[is_baseline - 1].df['TotalWithdrawals'].sum() / \
+    dff = data_list[is_baseline - 1].df.loc[data_list[is_baseline - 1].df.Cluster.notna()]
+    energy_start = (scenarios_name[0], dff[['IrrigationDesalinationEnergy', 'IrrigationPumpingEnergy']].sum())
+    gws_start = dff['TotalWithdrawals'].sum() / \
                 (data_list[is_baseline - 1].df.loc[data_list[is_baseline - 1].df['CI'] == 1,'RechargeRate'].sum() - data_list[is_baseline - 1].df.loc[data_list[is_baseline - 1].df['CI'] == 1,'EnvironmentalFlow'].sum())
     
     energy_per_cluster = []
@@ -558,17 +559,18 @@ elif module == 2:
     withdrawals_baseline = {}
     tech = {}
     for i, data in enumerate(data_list):
-        energy_per_cluster.append(data.df.groupby('Cluster').agg({'FinalDesalinationEnergy': 'sum', 
+        dff = data.df.loc[data.df.Cluster.notna()]
+        energy_per_cluster.append(dff.groupby('Cluster').agg({'FinalDesalinationEnergy': 'sum', 
                                                     'FinalPumpingEnergy': 'sum', 
                                                     'FinalTreatmentEnergy': 'first'}))
-        energy_end[scenarios_name[i + 1]] = data.df.agg({'FinalDesalinationEnergy': 'sum', 'FinalPumpingEnergy': 'sum'})
+        energy_end[scenarios_name[i + 1]] = dff.agg({'FinalDesalinationEnergy': 'sum', 'FinalPumpingEnergy': 'sum'})
         energy_end[scenarios_name[i + 1]]['FinalTreatmentEnergy'] = energy_per_cluster[i]['FinalTreatmentEnergy'].sum()
-        gws_end = data.df['FinalWaterWithdrawals'].sum() / (data.df.loc[data.df['CI'] == 1,'RechargeRate'].sum() - data.df.loc[data.df['CI'] == 1,'EnvironmentalFlow'].sum())
+        gws_end = dff['FinalWaterWithdrawals'].sum() / (data.df.loc[data.df['CI'] == 1,'RechargeRate'].sum() - data.df.loc[data.df['CI'] == 1,'EnvironmentalFlow'].sum())
         gws_values.append(gws_end)
         withdrawals_per_cluster[scenarios_name[i + 1]], withdrawals_total[scenarios_name[i + 1]], withdrawals_baseline[scenarios_name[i + 1]] = data.get_water_stats()
         withdrawals_per_cluster[scenarios_name[i + 1]]['Cluster'] = withdrawals_per_cluster[scenarios_name[i + 1]].index
         
-        tech[scenarios_name[i + 1]] = data.df.groupby('Cluster').agg({'PopulationLeastCostTechnology': 'max', 'IrrigationLeastCostTechnology': 'max',
+        tech[scenarios_name[i + 1]] = dff.groupby('Cluster').agg({'PopulationLeastCostTechnology': 'max', 'IrrigationLeastCostTechnology': 'max',
                                           'PopulationReclaimedWater': 'first', 'IrrigationReclaimedWater': 'first'})
     
     withdrawals_total['Baseline'] = withdrawals_baseline[scenarios_name[is_baseline]]
@@ -596,16 +598,17 @@ elif module == 2:
                 file_name = glob.glob("*.gz")
                 file_name = file_name[0].split('.')[0]
                 sensitivity_data = DataFrame(create_dataframe = False, lyr_names = lyr_names, input_file = file_name, save_csv = False,  cell_area = cell_area)
+                sensitivity_data.df = sensitivity_data.df.loc[sensitivity_data.df.Cluster.notna()]
                 sensitivity_energy[scenario.replace('- ','\n')] = sensitivity_energy[scenario.replace('- ','\n')].append(pd.DataFrame({'Desalination energy': sensitivity_data.df.agg({'FinalDesalinationEnergy': 'sum'}).values,
-                                                                              'Pumping energy': sensitivity_data.df.agg({'FinalPumpingEnergy': 'sum'}).values,
-                                                                              'Treatment energy': sensitivity_data.df.groupby('Cluster').agg({'FinalTreatmentEnergy': 'first'}).sum(),
-                                                                              'SensitivityVar': key}),
-                                                                ignore_index=True)
+                           'Pumping energy': sensitivity_data.df.agg({'FinalPumpingEnergy': 'sum'}).values,
+                           'Treatment energy': sensitivity_data.df.groupby('Cluster').agg({'FinalTreatmentEnergy': 'first'}).sum(),
+                           'SensitivityVar': key}),
+                           ignore_index=True)
                 if scenario.replace('- ','\n') == scenarios_name[is_baseline]:
                     sensitivity_energy['Baseline'] = sensitivity_energy['Baseline'].append(pd.DataFrame({'Desalination energy': sensitivity_data.df.agg({'IrrigationDesalinationEnergy': 'sum'}).values,
-                                                                              'Pumping energy': sensitivity_data.df.agg({'IrrigationPumpingEnergy': 'sum'}).values,
-                                                                              'Treatment energy': [0],
-                                                                              'SensitivityVar': key}),
+                                               'Pumping energy': sensitivity_data.df.agg({'IrrigationPumpingEnergy': 'sum'}).values,
+                                               'Treatment energy': [0],
+                                               'SensitivityVar': key}),
                                                                 ignore_index=True)
                     sensitivity_energy['Baseline']['Scenario'] = 'Baseline'
                     boolean_vec = sensitivity_energy['Baseline'].duplicated(subset=['Desalination energy'], keep=False)
