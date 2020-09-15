@@ -7,3 +7,4 @@ QGIS/*
 *Results/*
 *sensitivity/*
 *.gz
+*.ipynb
