@@ -10,7 +10,7 @@ import time
 
 # Column names of the input data table, containing all layers information,
 # this names must match the names of such columns, or if the dataframe is beign created,
-# then the names of each layer file must match the ones efined here.
+# then the names of each layer file must match the ones defined here.
 FN_REGION = 'Region'
 FN_X_COORDINATE = "X" # X coordinate field name
 FN_Y_COORDINATE = "Y" # Y coordinate field name
@@ -19,8 +19,6 @@ FN_GWD = "GroundwaterDepth" # GWD layer field name
 FN_LANDCOVER = "Landcover" # Landcover layer field name
 FN_POPULATION = "Population" # Population layer field name
 FN_TDS = "TDS" # TDS
-FN_TDS_CI = "TDS_CI" # TDS in the CI layer field name
-FN_TDS_CT = "TDS_CT" # TDS in the CT layer field name
 FN_ROAD_DIST = "RoadDistance" # Road distance layer field name
 FN_POP_CALIB = "PopCalibrated" # Population calibrated layer field name
 FN_POP_FUTURE = 'PopulationFuture' # Future population layer field name
@@ -71,8 +69,6 @@ SPE_TMAX = 'tmax'
 SPE_TAVG = 'tavg'
 SPE_ETO = 'eto'
 SPE_TDS_THRESHOLD = 'tdsThreshold'
-#SPE_MAX_ROAD_DIST = 'MaxRoadDist'
-#SPE_INCOME_PER_HA = 'IncomePerHa'
 
 SPE_MIN_POP = 30
 SPE_MIN_IRRIGATED = 3
@@ -90,8 +86,6 @@ lyr_names = {"Region": FN_REGION,
              "GWD": FN_GWD,
              "Landcover": FN_LANDCOVER,
              "Population": FN_POPULATION,
-             "TDS_CI": FN_TDS_CI,
-             "TDS_CT": FN_TDS_CT,
              "TDS": FN_TDS,
              "RoadDistance": FN_ROAD_DIST,
              "PopCalibrated": FN_POP_CALIB,
@@ -132,18 +126,18 @@ func_variables = {"a": 0,
 module = int(input('Select module: 1) Scenario analysis 2) Graphics 3) Cancel: '))
 
 if module == 1:
-    # specs_path = str(input("Enter the path for the excel file containing all scenarios specifications: "))
-    specs_path = 'Scenarios.xlsx'
+    specs_path = str(input("Enter the path for the excel file containing all scenarios specifications: "))
+    # specs_path = 'Scenarios.xlsx'
     xls_specs = pd.ExcelFile(specs_path)
     
     input_scenarios = str(input('The following scenarios were found, {}, please write the number of the scenarios that you want to run separated by commas, or type "all" to run all scenarios: '.format(', '.join([str(i + 1) + ') ' + x for i, x in enumerate(xls_specs.sheet_names)]))))
     
     scenarios = multiple_sheet_excel(xls_specs, input_scenarios)
     
-    pop_treatment_systems_path = 'Treatment Systems - population.xlsx'
-    agri_treatment_systems_path = 'Treatment Systems - agriculture.xlsx'
-    # pop_treatment_systems_path = str(input("Enter the path for the excel file containing all population treatment systems specifications: "))
-    # agri_treatment_systems_path = str(input("Enter the path for the excel file containing all agricultural treatment systems specifications: "))
+    # pop_treatment_systems_path = 'Treatment Systems - population.xlsx'
+    # agri_treatment_systems_path = 'Treatment Systems - agriculture.xlsx'
+    pop_treatment_systems_path = str(input("Enter the path for the excel file containing all population treatment systems specifications: "))
+    agri_treatment_systems_path = str(input("Enter the path for the excel file containing all agricultural treatment systems specifications: "))
     
     xls_pop_treatment_systems = pd.ExcelFile(pop_treatment_systems_path)
     xls_agri_treatment_systems = pd.ExcelFile(agri_treatment_systems_path)
@@ -152,42 +146,17 @@ if module == 1:
     treatment_systems_pop = multiple_sheet_excel(xls_pop_treatment_systems, 'all')
     treatment_systems_agri = multiple_sheet_excel(xls_agri_treatment_systems, 'all')
     
-    #specs = pd.read_excel(specs_path)
     create_dataframe = int(input('1) Create dataframe from separate layer files, 2) Load dataframe from file, 3) Cancel: '))
     
-    #    dir_files = str(input('Enter the file directory of all GIS layers: '))
     if create_dataframe == 1:
-    #    dir_files = "/Users/camo/Box Sync/SEE Master/Master Thesis/QGIS Analysis/Output Data/Rescaled 1km"
-######## Low GWD: ###############
-        # sensitivity_vars = {FN_GWD: -10}
-        # sensitivity_func = 'sum'
-############################################
-######## High GWD: ###############
-        # sensitivity_vars = {FN_GWD: 10}
-        # sensitivity_func = 'sum'
-############################################
-######## Low TDS: ###############
-        # sensitivity_vars = {FN_TDS: 0.5}
-        # sensitivity_func = 'times'
-############################################
-######## High TDS: ###############
-        # sensitivity_vars = {FN_TDS: 1.5}
-        # sensitivity_func = 'times'
-############################################
-######## No sensitivity case: ###############
-        sensitivity_vars = {}
-        sensitivity_func = None
-############################################
-        # dir_files = str(input("Enter the path for the folder containing all layers in csv format: "))
-        dir_files = 'Input data'
-        cell_area = int(input('Enter the cell area size in km: '))
+        dir_files = str(input("Enter the path for the folder containing all layers in csv format: "))
         file_name = str(input("Enter the name for the file: "))
+        cell_area = int(input('Enter the cell area size in km: '))
         main_data = DataFrame(create_dataframe = True, dir_files = dir_files, lyr_names = lyr_names, 
-                              file_name = file_name, save_csv = True, cell_area = cell_area, 
-                              sensitivity_vars = sensitivity_vars, sensitivity_func = sensitivity_func)
+                              file_name = file_name, save_csv = True, cell_area = cell_area)
     elif create_dataframe == 2:
-        # file_name = str(input('Enter the name of the input file: '))
-        file_name = 'nwsas_1km_low_gwd'
+        file_name = str(input('Enter the name of the input file: '))
+        # file_name = 'nwsas_1km_low_gwd'
         cell_area = int(input('Enter the cell area size in km: '))
         main_data = DataFrame(create_dataframe = False, lyr_names = lyr_names, input_file = file_name, save_csv = False, cell_area = cell_area)
     elif create_dataframe == 3:
@@ -221,7 +190,6 @@ if module == 1:
                 enter_groundwater_stress = "y"
                 calculate_groundwater_pumping = "y"
                 calculate_desalinisation = "y"
-                calculate_energy_costs = "y"
                 calculate_treatment = "y"
                 create_csv_tables = "y"
             else:
@@ -230,7 +198,6 @@ if module == 1:
                 enter_groundwater_stress = str(input('Calculate Groundwater Stress indicator? (y/n): ')).lower()
                 calculate_groundwater_pumping = str(input('Calculate Groundwater pumping energy? (y/n): ')).lower()
                 calculate_desalinisation = str(input('Calculate desalination energy? (y/n): ')).lower()
-                calculate_energy_costs = str(input('Calculate irrigation energy costs and share in the income? (y/n): ')).lower()
                 calculate_treatment = str(input('Calculate treatment system? (y/n): ')).lower()
                 create_csv_tables = str(input('Save results? (y/n): '))
             
@@ -313,19 +280,10 @@ if module == 1:
                     threshold = float(specs.loc[specs[SPE_REGION] == region, SPE_TDS_THRESHOLD])
                     data.reverse_osmosis_energy(region, threshold, osmosis_system)
             
-            
-            if calculate_energy_costs == 'y':
-                print('\nCalculating irrigation energy needs...')
-    #            data.df['IrrigationEnergyCost'] = 0
-    #            data.df['IrrigationWaterCost'] = 0
-    #            data.df['IncomeEnergyCostShare'] = 0
-                for region in specs[SPE_REGION]:
-                    print('    - Region {}...'.format(region))
-                    data.total_irrigation_energy()
-    #                electricity_price = float(specs.loc[specs[SPE_REGION] == region, SPE_ELEC_PRICE])
-    #                income_per_ha = float(specs.loc[specs[SPE_REGION] == region, SPE_INCOME_PER_HA])
-    #                data.total_energy_irrigation_cost(region, electricity_price)
-    #                data.income_energy_cost_share(region, income_per_ha)
+            print('\nCalculating irrigation energy needs...')
+            for region in specs[SPE_REGION]:
+                print('    - Region {}...'.format(region))
+                data.total_irrigation_energy()
                     
             if clustering == 'y':
                 print('\nRunning clustering algorithm for population and irrigated land areas...')
@@ -409,7 +367,6 @@ if module == 1:
             class_name_agri = data.least_cost_technology(systems_agri, 'IrrigationLeastCost')
             class_name = data.least_cost_system(['PopulationLeastCostTechnology','IrrigationLeastCostTechnology'],
                                                 class_name_pop, class_name_agri)
-    #        data.least_cost_option()
             
             print('\nCalculating final energy requirements...')
             data.calculate_final_energy(class_name_pop, class_name_agri)
@@ -421,13 +378,8 @@ if module == 1:
             
             if create_csv_tables == 'y':
                 print('\nCreating results files...')
-        #        folder_name = str(input('Enter folder name: ')) 
-#                if clustering == 'y': 
-#                    clust_text = ' (per cluster)'
-#                else:
-#                    clust_text = ' (by province)'
                 
-                folder_name = file_name + ' - Results' #+clust_text
+                folder_name = file_name.split('.')[0] + ' - Results'
                 scenario_folder = folder_name + '/' + scenario
                 if not os.path.isdir(folder_name):
                     os.makedirs(folder_name)
@@ -450,14 +402,7 @@ if module == 1:
                     if replace_files == 'y':
                         delete_files(scenario_folder + '/Rasters')
                 
-    #            urban_rural_pop = data.df.loc[:, ['X', 'Y', 'IsUrban']]
-    #            urban_rural_pop['IsUrban'] = urban_rural_pop['IsUrban'] * 1
-    #            urban_rural_pop.to_csv(scenario_folder + "/CSV/UrbanPopulation.csv", index = False)
-                
-    #            convert_m3_to_mm(data.cell_area, scenario_folder, data.df, 
-    #                             'TotalWithdrawals',
-    #                             'PopulationWater',
-    #                             'IrrigationWater')
+
                 if clustering == 'y':
                     centroids = centroid(data)
                     save_layers(scenario_folder, centroids, 'Centroid')
@@ -469,11 +414,6 @@ if module == 1:
                             'Cluster',
                             'IrrigatedArea')
                 
-    #            for system in treatment_systems.keys():
-    #                save_layers(scenario_folder, data.df,
-    #                        system + 'Energy',
-    #                        system + 'CAPEX',
-    #                        system + 'OPEX')
         
                 print('    - Saving {} scenario dataframe...'.format(scenario))
                 data.df.to_csv(scenario_folder + '/' + scenario + '.gz', index = False)
@@ -487,11 +427,7 @@ if module == 1:
             print('\nSystem classes:')
             print(set(data.df['LeastCostSystem'].dropna()))
             print(class_name)
-    #        print('\nLeast-cost options classes:')
-    #        print(set(data.df['LeastCostOption'].dropna()))
-    #        class_name_option = dict(class_name)
-    #        class_name_option['-1'] = 'GroundwaterExtraction'
-    #        print(class_name_option)
+ 
             
         elif choice == 3:
             print("\n...")
@@ -504,17 +440,12 @@ if module == 1:
             
 elif module == 2:
 #    number_of_files = int(input('Enter the amount of files to load: '))
-    # folder_path = str(input('Enter the path of the folder with the scenarios: '))
-    folder_path = 'nwsas_1km_data - Results'
+    folder_path = str(input('Enter the path of the folder with the scenarios: '))
+    # folder_path = 'nwsas_1km_data - Results'
     admin_names = pd.read_csv('admin1 names.csv')
     admin_names = admin_names.set_index('Province')
-#    folder_path = '/Users/camo/Box Sync/Master Thesis/Python Model/NWSAS_10km - Results'
     os.chdir(folder_path)
-    # for root, dirs, files in os.walk('.', topdown=False):
-        # for name in files:
-           # print(os.path.join(root, name))
-        # for name in dirs:
-           # print(os.path.join(root, name))
+
     scenarios = np.array([x[1] for x in os.walk('.')][0])
     input_scenarios = str(input('The following scenarios were found, {}, please write the number of the scenarios that you want to plot separated by commas: '.format(', '.join([str(i + 1) + ') ' + x for i, x in enumerate(scenarios)]))))
     scenarios = scenarios[[int(x)-1 for x in input_scenarios.split(',')]]
@@ -575,9 +506,10 @@ elif module == 2:
     
     withdrawals_total['Baseline'] = withdrawals_baseline[scenarios_name[is_baseline]]
     
-#    sensitivity_path = str(input('Enter the path of the folder with the scenarios: '))
-    sensitivity_path = {'TDS': 'nwsas_1km_tds_sensitivity',
-                        'Depth': 'nwsas_1km_gwd_sensitivity'}
+    # 'nwsas_1km_tds_sensitivity'
+    # 'nwsas_1km_gwd_sensitivity'
+    sensitivity_path = {'TDS': str(input('Enter the path of the folder with the sensitivity scenarios for TDS: ')),
+                        'Depth': str(input('Enter the path of the folder with the sensitivity scenarios for depth to groundwater: '))}
     sensitivity_variables = {}
     os.chdir('..')
     for key, value in sensitivity_path.items():

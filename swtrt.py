@@ -35,14 +35,13 @@ class DataFrame:
     """        
     def __init__(self, create_dataframe = None, lyr_names = None, dir_files: str = None, 
                  input_file = None, file_name = None, save_csv = False, empty = None, 
-                 cell_area = None, sensitivity_vars = None, sensitivity_func = None):
+                 cell_area = None):
         """
         Reads all layer datasets stored under a common directory and merges them into 
         a single dataframe, having the option to save the output into a new csv file.
         """
         if not empty:
             self.lyr_names = lyr_names
-    #        self.spe_names = spe_names
             self.cell_area = cell_area # cell area in km2
             
             if create_dataframe:
@@ -59,18 +58,10 @@ class DataFrame:
                     
                     self.df = reduce(lambda a,b: pd.merge(a, b, on = [lyr_names["X"], lyr_names["Y"]]), ldf)
                     self.df.loc[self.df[lyr_names["TDS"]] < 0,lyr_names["TDS"]] = 0
-    #                self.df.loc[self.df[lyr_names["Landcover"]] != 4,lyr_names["Landcover"]] = 0
-    #                self.df.loc[self.df[lyr_names["Landcover"]] == 4,lyr_names["Landcover"]] = 1
                     self.df.loc[self.df[lyr_names["Region"]] == 1,lyr_names["Region"]] = "Algeria"
                     self.df.loc[self.df[lyr_names["Region"]] == 2,lyr_names["Region"]] = "Tunisia"
                     self.df.loc[self.df[lyr_names["Region"]] == 3,lyr_names["Region"]] = "Libya"
                     self.df.loc[self.df[lyr_names["Region"]] == 0,lyr_names["Region"]] = None
-                    
-                    for variable, value in sensitivity_vars.items():
-                        if sensitivity_func == 'sum':
-                            self.df.loc[self.df[variable] > -value, variable] += value
-                        elif sensitivity_func == 'times':
-                            self.df[variable] *= value
                                 
                     if save_csv:
                         self.df.to_csv(file_name + ".gz", index = False)
@@ -80,7 +71,7 @@ class DataFrame:
                     
             else:
                 try:
-                    self.df = pd.read_csv(input_file + '.gz')
+                    self.df = pd.read_csv(input_file)
                 except FileNotFoundError:
                     print('Not such file in directory!')
             
@@ -214,9 +205,7 @@ class DataFrame:
     def total_withdrawals(self, region = None):
         """
         Calculates the total water withdrawals per cell area
-        """
-#        is_region = self.is_region(region)
-        
+        """        
         self.df[self.lyr_names['TotalWithdrawals']] = self.df[self.lyr_names['PopulationWater']] + \
                                 self.df[self.lyr_names['IrrigationWater']]
     
@@ -235,9 +224,6 @@ class DataFrame:
         the area-average annual recharge rate and the environmental stream flow
         """
         is_region = self.is_region(region)
-                
-#        recharge_rate = recharge_rate / 1000 * self.cell_area * 1000 ** 2
-#        environmental_flow = environmental_flow / 1000 * self.cell_area * 1000 ** 2
         
         self.df.loc[is_region, self.lyr_names[name]] = withdrawals.loc[is_region] \
                                 / (self.df.loc[is_region, 'RechargeRate'] -  self.df.loc[is_region, 'EnvironmentalFlow'])
@@ -276,21 +262,7 @@ class DataFrame:
         self.df['IrrigationDesalinationEnergy'] = self.df['DesalinationEnergy'] * self.df['IrrigationWater']
         self.df['IrrigationEnergyTotal'] = self.df['IrrigationDesalinationEnergy'] + self.df['IrrigationPumpingEnergy']
                 
-#    def total_energy_irrigation_cost(self, region, electricity_price):
-#        """
-#        Calculates the total price of the electricity used to pump and desalinate water for irrigation
-#        """
-#        is_region = self.is_region(region)
-#        self.df.loc[is_region, 'IrrigationEnergyCost'] = self.df.loc[is_region,'IrrigationEnergyTotal'] * electricity_price
-#        self.df.loc[is_region, 'IrrigationWaterCost'] = self.df.loc[is_region, 'IrrigationEnergyUni'] * electricity_price
         
-#    def income_energy_cost_share(self, region, income_per_ha):
-#        """
-#        Calculates the share of energy costs in the income per hectare for the region
-#        """
-#        is_region = self.is_region(region)
-#        self.df.loc[is_region, 'IncomeEnergyCostShare'] = self.df.loc[is_region,'IrrigationEnergyCost'] / (self.df.loc[is_region,'IrrigatedArea'] * income_per_ha)
-#        
     def clustering_algorithm(self, population_min, irrigated_min, cluster_num, clusterize):
         """
         Runs a clustering algorithm that combines and classify the population and irrigated area into clusters
@@ -306,7 +278,6 @@ class DataFrame:
             self.newdf = self.df.merge(clustering_vector, on = [self.lyr_names["X"], self.lyr_names["Y"]], how='outer')
         else:
             self.df.loc[(self.df['Population'] <= population_min) & (self.df['IrrigatedArea'] <= irrigated_min), 'Cluster'] = None
-#        plt.scatter(clustering_vector['X'], clustering_vector['Y'], s=15, c=y_hc, cmap='tab20', marker='o')
     
     def calculate_per_cluster(self, cluster, parameter, variable, min_variable):
         """
@@ -328,13 +299,16 @@ class DataFrame:
         self.df['PopulationReclaimedWater'] = None
         self.df['IrrigationReclaimedWater'] = None
         self.df['PopulationReclaimedWater'] = self.df['PopulationWaterPerCluster'].dropna() * pop_water_fraction
-        # self.df['IrrigationReclaimedWater'] = self.df['IrrigationWaterPerCluster'].dropna() * agri_water_fraction
         self.df['PopulationFutureReclaimedWater'] = None
         self.df['IrrigationFutureReclaimedWater'] = None
         self.df['PopulationFutureReclaimedWater'] = self.df['PopulationWaterPerCluster'].dropna() * pop_water_fraction * pop_growth
         self.df['IrrigationFutureReclaimedWater'] = self.df['IrrigationWaterPerCluster'].dropna() * agri_water_fraction * agri_growth
     
     def get_evap_i(self, lat, elev, wind, srad, tmin, tmax, tavg, month):
+        """
+        Uses the Pyeto library to calculate all climatic variables needed for running FAO56 Penman Monteith 
+        for an open water body and runs and returns the FAO56 Penman Monteith result
+        """
         J = 15 + (month-1)*30
             
         latitude = pyeto.deg2rad(lat)
@@ -414,17 +388,9 @@ class DataFrame:
                         parameter, variable, limit, limit_func):
         """
         Calculates the CAPEX for each treatment technology in each cluster 
-        """
-#        if variable == 'Population':
-#            growth = self.df['PopulationFuturePerCluster'].dropna() / \
-#                   self.df['PopulationPerCluster'].dropna()     
-#        elif variable == 'Irrigation':
-#            growth = self.df['IrrigatedAreaFuturePerCluster'].dropna()  / \
-#                    self.df['IrrigatedAreaPerCluster'].dropna() 
-        
+        """        
         population_total = self.df['PopulationFuturePerCluster'].dropna() 
         water_total = self.df[variable + 'ReclaimedWater'].dropna()
-#        water_total = self.df[variable + 'WaterPerCluster'].dropna()  * water_fraction * growth
         limit = np.array(list(limit) * water_total.shape[0])
         
         if 'water' in limit_func:
@@ -446,7 +412,6 @@ class DataFrame:
             population = population_total % limit
             water = water_total % limit_multiplier
             self.df.loc[self.df['Cluster'].notna(), treatment_system_name] = self.df[treatment_system_name].dropna(subset=['Cluster']) + eval(func)        
-         
         else:
             water = water_total
             population = population_total
@@ -486,9 +451,6 @@ class DataFrame:
         """
         Calculates the levelised cost of water for the capex
         """      
-#        capacity = self.df[variable + 'ReclaimedWater'].dropna()
-#        year = np.arange(years + 1)
-#        discount_factor = (1 / (1 + discount_rate))**year
         
         if variable == 'Population':
             growth = 'PopulationGrowthPerCluster'
@@ -501,8 +463,6 @@ class DataFrame:
         water = np.array([x * (1 + y)**year for x, y in np.array(self.df[[variable + 'ReclaimedWater', growth]].dropna())])
         
         self.df[investment_var + '_LCOW'] = None
-#        self.df.loc[self.df[variable + 'ReclaimedWater'].notna(), investment_var + '_LCOW'] = income_tax_factor * self.df[investment_var].dropna() / \
-#                                            (capacity * sum((1 - degradation_factor)**(year) * discount_factor))
         
         a = self.df.loc[self.df[variable + 'ReclaimedWater'].notna(), investment_var].dropna()
         b = np.array([sum(x * discount_factor) for x in water])
@@ -523,7 +483,6 @@ class DataFrame:
         discount_factor = (1 / (1 + discount_rate))**year
         
         water = np.array([x * (1 + y)**year for x, y in np.array(self.df[[variable + 'ReclaimedWater', growth]].dropna())])
-#        opex = opex_data / water
         
         self.df[op_cost_var + '_LCOW'] = None
         a = np.array([sum(x * discount_factor) for x in opex_data])
@@ -583,7 +542,6 @@ class DataFrame:
             Depth of the on-farm storage in meters.
         """
         not_na = self.df['IrrigationWaterPerCluster'].notna()
-        # self.df.loc[not_na, 'AgWaterReq'] = agri_water_req
         self.df.loc[not_na, 'available_storage'] = area_percent  * storage_depth * self.df.loc[not_na, 'IrrigatedArea'] * 10000
         self.df.loc[not_na, 'leakage_month'] = (leakage / 1000) * 30 * area_percent * self.df.loc[not_na, 'IrrigatedArea'] * 10000
         recoverable_water = (self.df.loc[not_na, 'IrrigationWater'] - (self.df.loc[not_na, agri_water_req] * self.df.loc[not_na, 'IrrigatedArea']/(1-agri_non_recoverable)))
@@ -623,6 +581,9 @@ class DataFrame:
         self.df['FinalWaterWithdrawals'] = self.df[['FinalIrrigationWater', 'PopulationWater']].sum(axis=1)
 
     def get_water_stats(self):
+        """
+        Caluculates basic water use statistics
+        """
         df = self.df.loc[self.df.Cluster.notna()]
         withdrawals_per_cluster = df.groupby('Cluster').agg({
                                     'FinalWaterWithdrawals': 'sum', 
@@ -642,8 +603,6 @@ class DataFrame:
                                           'Reused water from irrigation': 0,
                                           'Reused water from population': 0,
                                           'Baseline withdrawals': df['TotalWithdrawals'].sum()}, index=[0])
-#        reused_per_cluster = (withdrawals_per_cluster['TotalWithdrawals'].subtract(withdrawals_per_cluster['FinalWaterWithdrawals'])) / withdrawals_per_cluster['TotalWithdrawals']
-#        reused_global = (self.df['TotalWithdrawals'].subtract(self.df['FinalWaterWithdrawals']).sum()) / self.df['TotalWithdrawals'].sum()
         
         return withdrawals_per_cluster, withdrawals_total, withdrawals_baseline
     
@@ -802,7 +761,6 @@ def delete_files(folder):
         try:
             if os.path.isfile(file_path):
                 os.unlink(file_path)
-            #elif os.path.isdir(file_path): shutil.rmtree(file_path)
         except Exception as e:
             print(e)
 
@@ -829,10 +787,8 @@ def create_function(treatment_system, parameter, values):
     """
     func = str(treatment_system.loc[0, parameter])
     func = func.replace(' ','')
-#    limit_func = str(treatment_system.loc[0, limit_var])
     for key, value in values.items():
         func = func.replace(key, str(value))
-#        limit_func = limit_func.replace(key, str(value))
     return func
 
 
@@ -846,8 +802,7 @@ def calculate_lcows(data, clusters, variable, water_fraction, degradation_factor
                 data.df[name + 'LCOW_CAPEX'] = None
                 data.df[name + 'LCOW_OPEX'] = None
                 data.df[name + 'LCOW'] = None
-#                for cluster in set(data.df['Cluster'].dropna()):
-#                    print('    - Cluster {} of {}...'.format(int(cluster) + 1, clusters))
+
                 data.calculate_lcow_capex(variable = variable, investment_var = name + 'CAPEX', 
                                          water_var = variable + 'Water',
                                          degradation_factor = degradation_factor, income_tax_factor = income_tax_factor, 
@@ -880,13 +835,11 @@ def gws_plot_mathplot(gws_values, file_name):
                         bbox_to_anchor=(1,0))  
     plt.setp(legend.get_texts(), color=text_color)
     autolabel(bar, [tuple(x) for x in np.array(color_list)*0.8])
-#        p.set_frame_on(False)
     p.spines['right'].set_visible(False)
     p.spines['top'].set_visible(False)
     p.spines['left'].set_color(text_color)
     p.spines['bottom'].set_color(text_color)
     p.tick_params(colors=text_color)
-#        plt.setp(p.spines.values(), color=to_rgb(80,80,80))
     plt.show()
     plt.savefig(file_name, format='pdf')
 
@@ -952,6 +905,9 @@ def legend_generator(values):
     return color_list
 
 def gws_plot(gws_values, names, order):
+    """
+    Creates a graph showing the groundwater stress indicator for the different scenarios
+    """
     color_values = [to_rgb(255, 254, 187),
                     to_rgb(255, 202, 110),
                     to_rgb(255, 139, 76),
@@ -972,13 +928,9 @@ def gws_plot(gws_values, names, order):
     
     p = (ggplot() +
          geom_bar(new_df, aes(x='X_cat', y='GWS', fill= 'Legend'), stat='identity', size=0.5, color='gray') +
-#         geom_point(point_df.sort_values(['GWS']), aes(x= 'X', y='GWS'), alpha=0) +
          geom_text(df, aes(x='X',y='GWS/2',label='GWS'), color='black', nudge_y=0, size=8) +
          scale_fill_manual(labels=['Low (<1)','Low to medium (1-5)','Medium to high (5-10)','High (10-20)','Extremely high (>20)'],values= color_list) +
          scale_y_continuous(expand = [0, 0]) + 
-#         scale_x_continuous(breaks=[0]) +
-#         facet_wrap('X', shrink=False) +
-#         theme_minimal() +
          coord_flip() +
          theme_classic() + 
          labs(y='Groundwater Stress Indicator', x='Scenario') +
@@ -986,19 +938,19 @@ def gws_plot(gws_values, names, order):
                axis_title_x=element_text(color='black'),
                axis_title_y=element_text(color='black'))
         )
-#    print(p)
     p.save('GWS.pdf', height=4, width=2.5)
     
 def energy_plot(energy_start, energy_end, sensitivity_energy, order):
+    """
+    Creates a graph summarizing the energy uses in the entire region for the different scenarios
+    """
     energy_start[1].index = ['Desalination energy', 'Pumping energy']
     df_end = pd.DataFrame(columns=list('XYZ'))
     for i, value in energy_end.items():
         energy_end[i].index = ['Desalination energy', 'Pumping energy', 'Treatment energy']
         temp_df = pd.DataFrame({'X': i, 'Y': value.values, 'Z': energy_end[i].index})
         df_end = df_end.append(temp_df)
-#    energy_end.index = ['Desalination energy', 'Pumping energy', 'Treatment energy']
     df_start = pd.DataFrame({'X': energy_start[0], 'Y': energy_start[1].values, 'Z': energy_start[1].index})
-#    df_end = pd.DataFrame({'X': 'Water reuse', 'Y': energy_end.values, 'Z': energy_end.index})
     df = df_start.append(df_end)
     df['Y'] /= 1000000
     df['label_pos'] = df['Y'] / 2
@@ -1022,25 +974,17 @@ def energy_plot(energy_start, energy_end, sensitivity_energy, order):
                                     'Treatment energy': df_end.loc[(df_end['X'] == scenario) & (df_end['Z'] == 'Treatment energy'), 'Y'].sum()}))
         else:
             item['Desalination energy'] += df_start.loc[(df_start['X'] == scenario) & (df_start['Z'] != 'Desalination energy'), 'Y'].sum()
-#            item['Pumping energy'] += float(df_start.loc[(df_start['X'] == scenario) & (df_start['Z'] == 'Treatment energy'), 'Y'])
             for sensitivity in set(item['SensitivityVar']):
                 item = item.append(pd.DataFrame({'SensitivityVar': [sensitivity], 'Scenario': [scenario], 
                                     'Desalination energy': df_start.loc[(df_start['X'] == scenario), 'Y'].sum(),
                                     'Pumping energy': df_start.loc[(df_start['X'] == scenario) & (df_start['Z'] != 'Desalination energy'), 'Y'].sum(),
                                     'Treatment energy': df_start.loc[(df_start['X'] == scenario) & (df_start['Z'] == 'Treatment energy'), 'Y'].sum()}))
         sensitivity_df = sensitivity_df.append(item.melt(id_vars=['Scenario', 'SensitivityVar']))
-#        na_data = sensitivity_df.groupby(['SensitivityVar', 'variable']).mean()
-#        na_vector = sensitivity_df.loc[sensitivity_df['variable'] == 'Desalination energy', 'value'].values == float(na_data.loc[na_data.index.get_level_values('variable') == 'Desalination energy', 'value'].values)
-#        sensitivity_df.loc[na_vector, 'value'] = None
             
     sensitivity_df = sensitivity_df.dropna(subset=['value'])
     sensitivity_df['value'] /= 1000000 
     sensitivity_df['group'] = sensitivity_df['Scenario'] + sensitivity_df['variable']
     
-#    for scenario in set(sensitivity_df['Scenario']):
-#        for sensitivity, variable in zip(set(sensitivity_df['SensitivityVar']), set(sensitivity_df['variable'])):
-#            sensitivity_df = sensitivity_df.append(pd.DataFrame({'Scenario': scenario, 'SensitivityVar': sensitivity, 'variable': variable, 'value': [0]}))
-#    
     df['X'] = df['X'].astype('category')
     df['X_cat'] = df['X'].cat.reorder_categories(order, ordered=True)
     
@@ -1049,10 +993,8 @@ def energy_plot(energy_start, energy_end, sensitivity_energy, order):
         labs(y='Energy (GWh/yr)', x='Scenario') + 
         scale_fill_brewer(type='qual', palette='Set2') +
         scale_color_brewer(type='qual', palette='Set2') +
-#        scale_y_continuous(expand = [0, 0]) +
         coord_flip() + 
         theme_minimal() + geom_vline(xintercept=[1.5 + x for x in range(len(sensitivity_energy.items())-1)], size=0.5, colour="lightgray") +
-#        theme_classic() +
         theme(legend_title=element_blank(),
               axis_title_x=element_text(color='black'),
               axis_title_y=element_text(color='black'),
@@ -1063,11 +1005,12 @@ def energy_plot(energy_start, energy_end, sensitivity_energy, order):
         nudge *= -1
         p = (p + geom_line(sensitivity_df.loc[sensitivity_df['SensitivityVar'] == var], aes(x='Scenario', y='value', group='group', color='variable'), position = position_nudge(x = nudge)) +
             geom_point(sensitivity_df.loc[sensitivity_df['SensitivityVar'] == var], aes(x='Scenario', y='value', group='group', color='variable'), shape='|', position = position_nudge(x = nudge), size=2))
-#    print(p)
+
     p.save('Energy.pdf', height=5, width=5)
     
 def water_plot(withdrawals_total, order):
     '''
+    Creates a plot aggregating the water uses in the entire region for the different scenarios
     '''
     p = (ggplot() + coord_flip())
     min_low = 0
@@ -1119,6 +1062,7 @@ def water_plot(withdrawals_total, order):
     
 def water_plot_per_cluster(withdrawals_per_cluster, cluster, admin_names):
     '''
+    Creates a plot aggregating the water uses per cluster
     '''
     for scenario, value in withdrawals_per_cluster.items():
         min_low = 0
@@ -1126,7 +1070,6 @@ def water_plot_per_cluster(withdrawals_per_cluster, cluster, admin_names):
         order = value[['FinalIrrigationWater',
                        'PopulationWater']].sum(axis=1).sort_values().index.tolist()
         order = [str(x) for x in order]
-#        order_cat = CategoricalDtype(categories=order, ordered=True)
         highs = value[['FinalIrrigationWater',
                     'PopulationWater', 'Cluster']]
         lows = value[['IrrigationReusedWater',
@@ -1135,7 +1078,6 @@ def water_plot_per_cluster(withdrawals_per_cluster, cluster, admin_names):
         highs['value'] /= 1000000
         highs['Cluster'] = [str(x) for x in highs['Cluster']]
         highs['Cluster'] = highs['Cluster'].astype('category')
-#        highs['cluster_cat'] = highs['Cluster'].astype(str).astype(order_cat)
         highs['cluster_cat'] = highs['Cluster'].cat.reorder_categories(order, ordered=True)
         lows = lows.melt(id_vars=['Cluster'])
         lows['value'] /= -1000000
@@ -1158,7 +1100,6 @@ def water_plot_per_cluster(withdrawals_per_cluster, cluster, admin_names):
             + geom_text(text_df_1, aes(x='X', y='Y', label='label'), ha='right')
             + geom_text(text_df_2, aes(x='X', y='Y', label='label'), ha='left')
             + expand_limits(x=len(set(highs['Cluster'])) + 4) + labs(x='Cluster', y='Million cubic meters of water per year (Mm3/yr)'))
-#        print(p)  
         if cluster[scenario] == 'y':
             p = (p + scale_x_discrete(labels=[admin_names.loc[int(float(x)),'NAME_1'] +
                                               ' (' + admin_names.loc[int(float(x)),'ISO'] + ')' for x in order])
@@ -1168,6 +1109,7 @@ def water_plot_per_cluster(withdrawals_per_cluster, cluster, admin_names):
     
 def tech_plot(data, pop_dic, agri_dic, order):
     '''
+    Creates a plot summarizing the share of water treated by each technology in each scenario
     '''
     order = order[1:]
     df_end = pd.DataFrame(columns=['scenario', 'value', 'type', 'tech'])
@@ -1192,18 +1134,18 @@ def tech_plot(data, pop_dic, agri_dic, order):
         labs(y='Percentage of water treated by technology') + facet_wrap('~scenario') +
         scale_fill_brewer(type='div', palette='Brbg') + 
         scale_y_continuous(labels=lambda l: ["%d%%" % (v * 100) for v in l]) +
-#        scale_y_continuous(expand = [0, 0]) +
         theme_minimal() +
-#        theme_classic() +
         theme(legend_title=element_blank(),
               axis_title_x=element_blank(),
               axis_title_y=element_text(color='black'),
               legend_position = 'top'))
-#    print(p)
+
     p.save('Technology plot - ' + scenario.replace('\n', '') + '.pdf', height=5, width=7)
     
 def centroid(data):
-#    length = data.df.groupby('Cluster')['X'].count()
+    """
+    Extracts the centroids of each cluster
+    """
     centroids = data.df.groupby('Cluster').agg({'X':'mean','Y':'mean','Cluster':'first'})
     centroids.rename(columns = {'Cluster': 'Centroid'}, inplace=True)
     return centroids
