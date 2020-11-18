@@ -6,8 +6,8 @@ Created on Wed Apr  8 17:04:50 2020
 """
 import pandas as pd
 
-FN_GWD = "GroundwaterDepth" # GWD layer field name
-FN_TDS = "TDS" # TDS
+FN_GWD = "GroundwaterDepth"  # GWD layer field name
+FN_TDS = "TDS"  # TDS
 
 variables = {'gwd': {'sensitivity_vars': {'low': -10, 
                                           'high': 10}, 
