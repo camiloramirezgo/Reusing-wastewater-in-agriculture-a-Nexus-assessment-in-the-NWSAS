@@ -12,18 +12,18 @@ import time
 # this names must match the names of such columns, or if the dataframe is beign created,
 # then the names of each layer file must match the ones defined here.
 FN_REGION = 'Region'
-FN_X_COORDINATE = "X" # X coordinate field name
-FN_Y_COORDINATE = "Y" # Y coordinate field name
-FN_ELEVATION = "Elevation" # Elevation layer field name
-FN_GWD = "GroundwaterDepth" # GWD layer field name
-FN_LANDCOVER = "Landcover" # Landcover layer field name
-FN_POPULATION = "Population" # Population layer field name
-FN_TDS = "TDS" # TDS
-FN_ROAD_DIST = "RoadDistance" # Road distance layer field name
-FN_POP_CALIB = "PopCalibrated" # Population calibrated layer field name
-FN_POP_FUTURE = 'PopulationFuture' # Future population layer field name
-FN_SLOPE = 'Slope' # Slope layer field name
-FN_URBAN = 'IsUrban' # Site type layer field name. Idicates whether the site is urban (0 or 1)
+FN_X_COORDINATE = "X"  # X coordinate field name
+FN_Y_COORDINATE = "Y"  # Y coordinate field name
+FN_ELEVATION = "Elevation"  # Elevation layer field name
+FN_GWD = "GroundwaterDepth"  # GWD layer field name
+FN_LANDCOVER = "Landcover"  # Landcover layer field name
+FN_POPULATION = "Population"  # Population layer field name
+FN_TDS = "TDS"  # TDS
+FN_ROAD_DIST = "RoadDistance"  # Road distance layer field name
+FN_POP_CALIB = "PopCalibrated"  # Population calibrated layer field name
+FN_POP_FUTURE = 'PopulationFuture'  # Future population layer field name
+FN_SLOPE = 'Slope'  # Slope layer field name
+FN_URBAN = 'IsUrban'  # Site type layer field name. Idicates whether the site is urban (0 or 1)
 FN_IRR_AREA = 'IrrigatedArea'
 FN_IRR_WATER = 'IrrigationWater'
 FN_POP_WATER = 'PopulationWater'
@@ -78,6 +78,7 @@ POP_REUSED_WATER = 0.9
 AGRI_WATER_FRACTION = 0.3
 AGRI_NON_RECOVERABLE = 0.2
 AGRI_WATER_REQ = 'AgWaterReq'
+DISCOUNT_RATE = 0.04
 
 lyr_names = {"Region": FN_REGION,
              "X": FN_X_COORDINATE,
@@ -122,67 +123,78 @@ func_variables = {"a": 0,
                   "v": "water",
                   "E": 'exp'}
 
-
 module = int(input('Select module: 1) Scenario analysis 2) Graphics 3) Cancel: '))
 
 if module == 1:
-    specs_path = str(input("Enter the path for the excel file containing all scenarios specifications: "))
-    # specs_path = 'Scenarios.xlsx'
+    # specs_path = str(input("Enter the path for the excel file containing all scenarios specifications: "))
+    specs_path = 'Scenarios.xlsx'
     xls_specs = pd.ExcelFile(specs_path)
-    
-    input_scenarios = str(input('The following scenarios were found, {}, please write the number of the scenarios that you want to run separated by commas, or type "all" to run all scenarios: '.format(', '.join([str(i + 1) + ') ' + x for i, x in enumerate(xls_specs.sheet_names)]))))
-    
+
+    input_scenarios = str(input(
+        'The following scenarios were found, {}, please write the number of the scenarios that you want to run separated by commas, or type "all" to run all scenarios: '.format(
+            ', '.join([str(i + 1) + ') ' + x for i, x in enumerate(xls_specs.sheet_names)]))))
+
     scenarios = multiple_sheet_excel(xls_specs, input_scenarios)
-    
-    # pop_treatment_systems_path = 'Treatment Systems - population.xlsx'
-    # agri_treatment_systems_path = 'Treatment Systems - agriculture.xlsx'
-    pop_treatment_systems_path = str(input("Enter the path for the excel file containing all population treatment systems specifications: "))
-    agri_treatment_systems_path = str(input("Enter the path for the excel file containing all agricultural treatment systems specifications: "))
-    
+
+    pop_treatment_systems_path = 'Treatment Systems - population.xlsx'
+    agri_treatment_systems_path = 'Treatment Systems - agriculture.xlsx'
+    # pop_treatment_systems_path = str(
+    #     input("Enter the path for the excel file containing all population treatment systems specifications: "))
+    # agri_treatment_systems_path = str(
+    #     input("Enter the path for the excel file containing all agricultural treatment systems specifications: "))
+
     xls_pop_treatment_systems = pd.ExcelFile(pop_treatment_systems_path)
     xls_agri_treatment_systems = pd.ExcelFile(agri_treatment_systems_path)
     pd.options.display.max_colwidth = 100
-    
+
     treatment_systems_pop = multiple_sheet_excel(xls_pop_treatment_systems, 'all')
     treatment_systems_agri = multiple_sheet_excel(xls_agri_treatment_systems, 'all')
-    
-    create_dataframe = int(input('1) Create dataframe from separate layer files, 2) Load dataframe from file, 3) Cancel: '))
-    
+
+    create_dataframe = int(
+        input('1) Create dataframe from separate layer files, 2) Load dataframe from file, 3) Cancel: '))
+
     if create_dataframe == 1:
         dir_files = str(input("Enter the path for the folder containing all layers in csv format: "))
         file_name = str(input("Enter the name for the file: "))
         cell_area = int(input('Enter the cell area size in km: '))
-        main_data = DataFrame(create_dataframe = True, dir_files = dir_files, lyr_names = lyr_names, 
-                              file_name = file_name, save_csv = True, cell_area = cell_area)
+        main_data = DataFrame(create_dataframe=True, dir_files=dir_files, lyr_names=lyr_names,
+                              file_name=file_name, save_csv=True, cell_area=cell_area)
     elif create_dataframe == 2:
-        file_name = str(input('Enter the name of the input file: '))
-        # file_name = 'nwsas_1km_low_gwd'
-        cell_area = int(input('Enter the cell area size in km: '))
-        main_data = DataFrame(create_dataframe = False, lyr_names = lyr_names, input_file = file_name, save_csv = False, cell_area = cell_area)
+        # file_name = str(input('Enter the name of the input file: '))
+        file_name = 'nwsas_10km_data.gz'
+        # cell_area = int(input('Enter the cell area size in km: '))
+        cell_area = 10
+        main_data = DataFrame(create_dataframe=False, lyr_names=lyr_names, input_file=file_name, save_csv=False,
+                              cell_area=cell_area)
     elif create_dataframe == 3:
         exit()
-    
+
+    folder_name = input('Enter the name of the folder you want to save the results in: ')
+
     run_all = 0
     all_procedures = False
     start_time = time.time()
     for scenario, specs in scenarios.items():
-        data = DataFrame(empty = True)
+        data = DataFrame(empty=True)
         data.copy(main_data)
-        
+
         if run_all == 0:
-            choice = int(input('1) Run the "{}" scenario 2) Run all procedures on all scenarios 3) Skip scenario: '.format(scenario)))
+            choice = int(input(
+                '1) Run the "{}" scenario 2) Run all procedures on all scenarios 3) Skip scenario: '.format(scenario)))
             if choice == 2:
                 run_all = 1
                 choice = 1
                 all_procedures = True
                 calibrate_pop = 'all'
-        
+
         if choice == 1:
-            print("\n------------------------------\nRunning {} scenario\n------------------------------".format(scenario))
+            print("\n------------------------------\nRunning {} scenario\n------------------------------".format(
+                scenario))
             clustering = str(specs.loc[0, SPE_CLUSTERING])
             if not all_procedures:
-                calibrate_pop = str(input('Calibrate urban and rural population? (y/n) (type "all" to run all procedures): ')).lower()
-            
+                calibrate_pop = str(
+                    input('Calibrate urban and rural population? (y/n) (type "all" to run all procedures): ')).lower()
+
             if calibrate_pop == "all":
                 all_procedures = True
                 enter_irrigation_system = "y"
@@ -193,14 +205,15 @@ if module == 1:
                 calculate_treatment = "y"
                 create_csv_tables = "y"
             else:
-                enter_irrigation_system = str(input('Calibrate irrigated area and calculate irrigation water needs? (y/n): ')).lower()
+                enter_irrigation_system = str(
+                    input('Calibrate irrigated area and calculate irrigation water needs? (y/n): ')).lower()
                 calculate_population_water = str(input('Calculate population water needs? (y/n): ')).lower()
                 enter_groundwater_stress = str(input('Calculate Groundwater Stress indicator? (y/n): ')).lower()
                 calculate_groundwater_pumping = str(input('Calculate Groundwater pumping energy? (y/n): ')).lower()
                 calculate_desalinisation = str(input('Calculate desalination energy? (y/n): ')).lower()
                 calculate_treatment = str(input('Calculate treatment system? (y/n): ')).lower()
                 create_csv_tables = str(input('Save results? (y/n): '))
-            
+
             if calibrate_pop == "y" or calibrate_pop == "all":
                 print('\nCalibrating population...')
                 data.df[lyr_names["IsUrban"]] = 0
@@ -212,13 +225,13 @@ if module == 1:
                     urban_current = float(specs.loc[specs[SPE_REGION] == region, SPE_URBAN])
                     urban_future = float(specs.loc[specs[SPE_REGION] == region, SPE_URBAN_FUTURE])
                     urban_cutoff = 0
-                    
-                    urban_cutoff, urban_modelled = data.calibrate_pop_and_urban(region, pop_actual, pop_future, urban_current,
+
+                    urban_cutoff, urban_modelled = data.calibrate_pop_and_urban(region, pop_actual, pop_future,
+                                                                                urban_current,
                                                                                 urban_future, urban_cutoff)
                     specs.loc[specs[SPE_REGION] == region, SPE_URBAN_CUTOFF] = urban_cutoff
                     specs.loc[specs[SPE_REGION] == region, SPE_URBAN_MODELLED] = urban_modelled
-                    
-        
+
             if enter_irrigation_system == 'y':
                 print('\nCalibrating irrigation area and calculating irrigation water needs...')
                 data.df['IrrigatedAreaFuture'] = None
@@ -228,10 +241,10 @@ if module == 1:
                     irrigation_per_ha = float(specs.loc[specs[SPE_REGION] == region, SPE_IRRIGATION_WATER])
                     irrigated_area_growth = float(specs.loc[specs[SPE_REGION] == region, SPE_IRRIGATED_AREA_FUTURE]) / \
                                             float(specs.loc[specs[SPE_REGION] == region, SPE_IRRIGATED_AREA])
-                            
-                    data.calculate_irrigation_system(region, total_irrigated_area, irrigation_per_ha, irrigated_area_growth)
-            
-            
+
+                    data.calculate_irrigation_system(region, total_irrigated_area, irrigation_per_ha,
+                                                     irrigated_area_growth)
+
             if calculate_population_water == 'y':
                 print('\nCalculating population water needs...')
                 for region in specs[SPE_REGION]:
@@ -239,8 +252,7 @@ if module == 1:
                     urban_uni_water = float(specs.loc[specs[SPE_REGION] == region, SPE_URBAN_WATER])
                     rural_uni_water = float(specs.loc[specs[SPE_REGION] == region, SPE_RURAL_WATER])
                     data.calculate_population_water(region, urban_uni_water, rural_uni_water)
-            
-            
+
             if enter_groundwater_stress == 'y':
                 print('\nCalculating Groundwater Stress indicator...')
                 data.total_withdrawals()
@@ -252,8 +264,7 @@ if module == 1:
                     environmental_flow = float(specs.loc[specs[SPE_REGION] == region, SPE_ENVIRONMENAL_FLOW])
                     data.recharge_rate(region, recharge_rate, environmental_flow)
                     data.groundwater_stress(region, data.df['TotalWithdrawals'])
-                    
-            
+
             if calculate_groundwater_pumping == 'y':
                 print('\nCalculating groundwater pumping energy intensity...')
                 for region in specs[SPE_REGION]:
@@ -265,11 +276,11 @@ if module == 1:
                     pump_efficiency = float(specs.loc[specs[SPE_REGION] == region, SPE_PUMP_EFFICIENCY])
                     irrigation_hours = float(specs.loc[specs[SPE_REGION] == region, SPE_IRRIGATION_HOURS])
                     groundwater_pipe = PipeSystem(groundwater_diameter, groundwater_roughness)
-                    data.groundwater_pumping_energy(region = region, hours = irrigation_hours, 
-                                                    density = groundwater_density, delivered_head = 0, pump_efficiency = pump_efficiency, calculate_friction = False,
-                                                    viscosity = groundwater_viscosity, pipe = groundwater_pipe)
-                    
-            
+                    data.groundwater_pumping_energy(region=region, hours=irrigation_hours,
+                                                    density=groundwater_density, delivered_head=0,
+                                                    pump_efficiency=pump_efficiency, calculate_friction=False,
+                                                    viscosity=groundwater_viscosity, pipe=groundwater_pipe)
+
             if calculate_desalinisation == 'y':
                 print('\nCalculating groundwater desalination energy intensity...')
                 for region in specs[SPE_REGION]:
@@ -279,24 +290,26 @@ if module == 1:
                     data.df['GroundwaterTemperature'] = 25
                     threshold = float(specs.loc[specs[SPE_REGION] == region, SPE_TDS_THRESHOLD])
                     data.reverse_osmosis_energy(region, threshold, osmosis_system)
-            
+
             print('\nCalculating irrigation energy needs...')
             for region in specs[SPE_REGION]:
                 print('    - Region {}...'.format(region))
                 data.total_irrigation_energy()
-                    
+
             if clustering == 'y':
                 print('\nRunning clustering algorithm for population and irrigated land areas...')
                 try:
                     del data.df['Cluster']
                 except:
                     print('Creating clusters...')
-                data.clustering_algorithm(population_min = SPE_MIN_POP, irrigated_min = SPE_MIN_IRRIGATED, cluster_num = SPE_CLUSTER_NUM, clusterize = True)
+                data.clustering_algorithm(population_min=SPE_MIN_POP, irrigated_min=SPE_MIN_IRRIGATED,
+                                          cluster_num=SPE_CLUSTER_NUM, clusterize=True)
                 data.df = data.newdf
             else:
-                data.df.loc[data.df['Cluster'] == 0,'Cluster'] = None
-                data.clustering_algorithm(population_min = SPE_MIN_POP, irrigated_min = SPE_MIN_IRRIGATED, cluster_num = SPE_CLUSTER_NUM, clusterize = False)
-                
+                data.df.loc[data.df['Cluster'] == 0, 'Cluster'] = None
+                data.clustering_algorithm(population_min=SPE_MIN_POP, irrigated_min=SPE_MIN_IRRIGATED,
+                                          cluster_num=SPE_CLUSTER_NUM, clusterize=False)
+
             data.df['PopulationPerCluster'] = None
             data.df['PopulationFuturePerCluster'] = None
             data.df['IrrigatedAreaPerCluster'] = None
@@ -304,7 +317,7 @@ if module == 1:
             data.df['PopulationWaterPerCluster'] = None
             data.df['PopulationWaterFuturePerCluster'] = None
             data.df['IrrigationWaterPerCluster'] = None
-            
+
             print('\nCalculating per-cluster data...')
             for cluster in set(data.df['Cluster'].dropna()):
                 data.calculate_per_cluster(cluster, 'Population', 'PopulationFuture', SPE_MIN_POP)
@@ -313,51 +326,63 @@ if module == 1:
                 data.calculate_per_cluster(cluster, 'IrrigatedAreaFuture', 'IrrigatedArea', SPE_MIN_IRRIGATED)
                 data.calculate_per_cluster(cluster, 'PopulationWater', 'PopulationFuture', SPE_MIN_POP)
                 data.calculate_per_cluster(cluster, 'IrrigationWater', 'IrrigatedArea', SPE_MIN_IRRIGATED)
-            
+
             print('\nCalculating final water extractions and reuse share...')
             data.calculate_reclaimed_water(POP_WATER_FRACTION, AGRI_WATER_FRACTION)
             data.get_eto(SPE_ETO, SPE_LAT, SPE_ELEVATION, SPE_WIND, SPE_SRAD, SPE_TMIN, SPE_TMAX, SPE_TAVG)
-            data.get_storage(leakage=0.9, area_percent=0.02, storage_depth=3, agri_water_req=AGRI_WATER_REQ, agri_non_recoverable=AGRI_NON_RECOVERABLE)
-            data.reused_water(pop_percentage_of_reuse = POP_REUSED_WATER)
-            
+            data.get_storage(leakage=0.9, area_percent=0.02, storage_depth=3, agri_water_req=AGRI_WATER_REQ,
+                             agri_non_recoverable=AGRI_NON_RECOVERABLE)
+            data.reused_water(pop_percentage_of_reuse=POP_REUSED_WATER)
+
             if calculate_treatment == 'y':
                 years = float(specs.loc[0, SPE_END_YEAR] - specs.loc[0, SPE_START_YEAR])
                 data.df['PopulationGrowthPerCluster'] = (data.df['PopulationFuturePerCluster'] / \
-                                                         data.df['PopulationPerCluster'])**(1./years) - 1
+                                                         data.df['PopulationPerCluster']) ** (1. / years) - 1
                 data.df['IrrigatedGrowthPerCluster'] = (data.df['IrrigatedAreaFuturePerCluster'] / \
-                                                         data.df['IrrigatedAreaPerCluster'])**(1./years) - 1
-                
+                                                        data.df['IrrigatedAreaPerCluster']) ** (1. / years) - 1
+
                 data.population_opex = {}
                 for name, system in treatment_systems_pop.items():
                     print('\nCalculating {} treatment system CAPEX, OPEX and energy requirements...'.format(name))
-                    data.calculate_capex(treatment_system_name = name + 'CAPEX', treatment_system = system, values = func_variables,
-                                         parameter = 'CAPEXFunction', variable = 'PopulationFuture', limit = 'Limit', limit_func = 'Population')
-                    data.population_opex[name] = data.calculate_opex(treatment_system_name = name + 'OPEX', treatment_system = system, values = func_variables,
-                                        water_fraction = POP_WATER_FRACTION, parameter = 'OPEXFunction', variable = 'Population', years = years)
-                    data.calculate_treatment_energy(treatment_system_name = name + 'Energy', treatment_system = system, values = func_variables, 
-                                               parameter = 'EnergyFunction', variable = 'Population')
-                    
+                    data.calculate_capex(treatment_system_name=name + 'CAPEX', treatment_system=system,
+                                         values=func_variables,
+                                         parameter='CAPEXFunction', variable='PopulationFuture', limit='Limit',
+                                         limit_func='Population')
+                    data.population_opex[name] = data.calculate_opex(treatment_system_name=name + 'OPEX',
+                                                                     treatment_system=system, values=func_variables,
+                                                                     water_fraction=POP_WATER_FRACTION,
+                                                                     parameter='OPEXFunction', variable='Population',
+                                                                     years=years)
+                    data.calculate_treatment_energy(treatment_system_name=name + 'Energy', treatment_system=system,
+                                                    values=func_variables,
+                                                    parameter='EnergyFunction', variable='Population')
+
                 data.irrigation_opex = {}
                 for name, system in treatment_systems_agri.items():
                     print('\nCalculating {} treatment system CAPEX, OPEX and energy requirements...'.format(name))
-                    data.calculate_capex(treatment_system_name = name + 'CAPEX', treatment_system = system, values = func_variables,
-                                         parameter = 'CAPEXFunction', variable = 'IrrigationFuture', limit = 'Limit', limit_func = 'Irrigation')
-                    data.irrigation_opex[name] = data.calculate_opex(treatment_system_name = name + 'OPEX', treatment_system = system, values = func_variables,
-                                        water_fraction = AGRI_WATER_FRACTION, parameter = 'OPEXFunction', variable = 'Irrigation', years = years)
-                    data.calculate_treatment_energy(treatment_system_name = name + 'Energy', treatment_system = system, values = func_variables, 
-                                               parameter = 'EnergyFunction', variable = 'Irrigation')
-                
-                
+                    data.calculate_capex(treatment_system_name=name + 'CAPEX', treatment_system=system,
+                                         values=func_variables,
+                                         parameter='CAPEXFunction', variable='IrrigationFuture', limit='Limit',
+                                         limit_func='Irrigation')
+                    data.irrigation_opex[name] = data.calculate_opex(treatment_system_name=name + 'OPEX',
+                                                                     treatment_system=system, values=func_variables,
+                                                                     water_fraction=AGRI_WATER_FRACTION,
+                                                                     parameter='OPEXFunction', variable='Irrigation',
+                                                                     years=years)
+                    data.calculate_treatment_energy(treatment_system_name=name + 'Energy', treatment_system=system,
+                                                    values=func_variables,
+                                                    parameter='EnergyFunction', variable='Irrigation')
+
             print('\nCalculating LCOWs for each treatment technology:')
-            calculate_lcows(data, clusters = SPE_CLUSTER_NUM, variable = 'Population', water_fraction = POP_WATER_FRACTION, 
-                            degradation_factor = 0.01, income_tax_factor = 1, years = years, discount_rate = 0.04, 
-                            treatment_systems = treatment_systems_pop, variable_present = 'Population',
-                            opex_data = data.population_opex)
-            calculate_lcows(data, clusters = SPE_CLUSTER_NUM, variable = 'Irrigation', water_fraction = AGRI_WATER_FRACTION, 
-                            degradation_factor = 0.01, income_tax_factor = 1, years = years, discount_rate = 0.04, 
-                            treatment_systems = treatment_systems_agri, variable_present = 'IrrigatedArea', 
-                            opex_data = data.irrigation_opex)
-            
+            calculate_lcows(data, clusters=SPE_CLUSTER_NUM, variable='Population', water_fraction=POP_WATER_FRACTION,
+                            degradation_factor=0.01, income_tax_factor=1, years=years, discount_rate=DISCOUNT_RATE,
+                            treatment_systems=treatment_systems_pop, variable_present='Population',
+                            opex_data=data.population_opex)
+            calculate_lcows(data, clusters=SPE_CLUSTER_NUM, variable='Irrigation', water_fraction=AGRI_WATER_FRACTION,
+                            degradation_factor=0.01, income_tax_factor=1, years=years, discount_rate=DISCOUNT_RATE,
+                            treatment_systems=treatment_systems_agri, variable_present='IrrigatedArea',
+                            opex_data=data.irrigation_opex)
+
             print('\nChoosing the least-costs treatment system based on LCOW...')
             systems_pop = [a + 'LCOW' for a in list(treatment_systems_pop.keys())]
             class_name_pop = data.least_cost_technology(systems_pop, 'PopulationLeastCost')
@@ -365,59 +390,50 @@ if module == 1:
             systems = list(systems_agri)
             systems.append('IrrigationWaterCost')
             class_name_agri = data.least_cost_technology(systems_agri, 'IrrigationLeastCost')
-            class_name = data.least_cost_system(['PopulationLeastCostTechnology','IrrigationLeastCostTechnology'],
+            class_name = data.least_cost_system(['PopulationLeastCostTechnology', 'IrrigationLeastCostTechnology'],
                                                 class_name_pop, class_name_agri)
-            
+
             print('\nCalculating final energy requirements...')
             data.calculate_final_energy(class_name_pop, class_name_agri)
-            
+
             print('\nCalculating final Groundwater Stress indicator...')
             for region in specs[SPE_REGION]:
                 print('    - Region {}...'.format(region))
                 data.groundwater_stress(region, data.df['FinalWaterWithdrawals'], 'GroundwaterStressEnd')
-            
+
             if create_csv_tables == 'y':
                 print('\nCreating results files...')
-                
-                folder_name = file_name.split('.')[0] + ' - Results'
-                scenario_folder = folder_name + '/' + scenario
-                if not os.path.isdir(folder_name):
-                    os.makedirs(folder_name)
-                    os.makedirs(scenario_folder)
-                    os.makedirs(scenario_folder + '/CSV')
-                    os.makedirs(scenario_folder + '/Rasters')
-                else:
-                    if not os.path.isdir(scenario_folder):
-                        os.makedirs(scenario_folder)
-                        if not os.path.isdir(scenario_folder + '/CSV'):
-                            os.makedirs(scenario_folder + '/CSV')    
-                        if not os.path.isdir(scenario_folder + '/Rasters'):
-                            os.makedirs(scenario_folder + '/Rasters')
+
+                # folder_name = file_name.split('.')[0] + ' - Results'
+                scenario_folder = os.path.join(folder_name, scenario)
+                os.makedirs(os.path.join(scenario_folder, 'CSV'), exist_ok=True)
+                os.makedirs(os.path.join(scenario_folder, 'Rasters'), exist_ok=True)
+
                 if (len(os.listdir(scenario_folder + '/CSV')) > 0) & (not all_procedures):
-                    replace_files = str(input('The CSV folder already contains files, do you want to replace them? (y/n): '))
+                    replace_files = str(
+                        input('The CSV folder already contains files, do you want to replace them? (y/n): '))
                     if replace_files == 'y':
                         delete_files(scenario_folder + '/CSV')
                 if (len(os.listdir(scenario_folder + '/Rasters')) > 0) & (not all_procedures):
-                    replace_files = str(input('The Rasters folder already contains files, do you want to replace them? (y/n): '))
+                    replace_files = str(
+                        input('The Rasters folder already contains files, do you want to replace them? (y/n): '))
                     if replace_files == 'y':
                         delete_files(scenario_folder + '/Rasters')
-                
 
                 if clustering == 'y':
                     centroids = centroid(data)
                     save_layers(scenario_folder, centroids, 'Centroid')
-                    
+
                 save_layers(scenario_folder, data.df,
                             'GroundwaterStress',
                             'GroundwaterStressEnd',
                             'LeastCostSystem',
                             'Cluster',
                             'IrrigatedArea')
-                
-        
+
                 print('    - Saving {} scenario dataframe...'.format(scenario))
-                data.df.to_csv(scenario_folder + '/' + scenario + '.gz', index = False)
-            
+                data.df.to_csv(scenario_folder + '/' + scenario + '.gz', index=False)
+
             print('\nPopulation classes:')
             print(set(data.df['PopulationLeastCostTechnology'].dropna()))
             print(class_name_pop)
@@ -427,19 +443,20 @@ if module == 1:
             print('\nSystem classes:')
             print(set(data.df['LeastCostSystem'].dropna()))
             print(class_name)
- 
-            
+
+
         elif choice == 3:
             print("\n...")
-            
+
     end_time = time.time()
     minutes = np.floor((end_time - start_time) / 60)
     print('\nTotal enlapsed time')
-    print(str(int(minutes // 60)) + ' hours, ' + str(int(minutes % 60)) + ' min, ' + str(round((end_time - start_time) % 60, 2)) + ' sec')
+    print(str(int(minutes // 60)) + ' hours, ' + str(int(minutes % 60)) + ' min, ' + str(
+        round((end_time - start_time) % 60, 2)) + ' sec')
 
-            
+
 elif module == 2:
-#    number_of_files = int(input('Enter the amount of files to load: '))
+    #    number_of_files = int(input('Enter the amount of files to load: '))
     folder_path = str(input('Enter the path of the folder with the scenarios: '))
     # folder_path = 'nwsas_1km_data - Results'
     admin_names = pd.read_csv('admin1 names.csv')
@@ -447,101 +464,118 @@ elif module == 2:
     os.chdir(folder_path)
 
     scenarios = np.array([x[1] for x in os.walk('.')][0])
-    input_scenarios = str(input('The following scenarios were found, {}, please write the number of the scenarios that you want to plot separated by commas: '.format(', '.join([str(i + 1) + ') ' + x for i, x in enumerate(scenarios)]))))
-    scenarios = scenarios[[int(x)-1 for x in input_scenarios.split(',')]]
+    input_scenarios = str(input(
+        'The following scenarios were found, {}, please write the number of the scenarios that you want to plot separated by commas: '.format(
+            ', '.join([str(i + 1) + ') ' + x for i, x in enumerate(scenarios)]))))
+    scenarios = scenarios[[int(x) - 1 for x in input_scenarios.split(',')]]
     print(scenarios)
-    is_baseline = int(input('Select the scenario from which the baseline will be extracted:\n    {}\nInput: '.format('\n    '.join([str(i + 1) + ') ' + x for i, x in enumerate(scenarios)]))))
-    keep_scenario = input('Plot the {} scenario too?(y/n): '.format(scenarios[is_baseline-1]))
+    is_baseline = int(input('Select the scenario from which the baseline will be extracted:\n    {}\nInput: '.format(
+        '\n    '.join([str(i + 1) + ') ' + x for i, x in enumerate(scenarios)]))))
+    keep_scenario = input('Plot the {} scenario too?(y/n): '.format(scenarios[is_baseline - 1]))
     data_list = []
     cluster = {}
     cell_area = int(input('Enter the cell area size in km: '))
-    
+
     for scenario in scenarios:
-        cluster[scenario.replace('- ','\n')] = str(input('Load cluster names for {} scenario?(y/n): '.format(scenario)))
-        
+        cluster[scenario.replace('- ', '\n')] = str(
+            input('Load cluster names for {} scenario?(y/n): '.format(scenario)))
+
     for scenario in scenarios:
-#        file_name = str(input('Enter the path of the input file: '))
+        #        file_name = str(input('Enter the path of the input file: '))
         print('\nLoading {} scenario...'.format(scenario))
         os.chdir(scenario)
         file_name = glob.glob("*.gz")
         file_name = file_name[0].split('.')[0]
-        data_list.append(DataFrame(create_dataframe = False, lyr_names = lyr_names, input_file = file_name, save_csv = False,  cell_area = cell_area))
+        data_list.append(DataFrame(create_dataframe=False, lyr_names=lyr_names, input_file=file_name, save_csv=False,
+                                   cell_area=cell_area))
         os.chdir('..')
-        
-    #scenarios_name = str(input('Enter the names of the scenarios: '))
-    #scenarios_name = 'Baseline, Water reuse \n(clustering), Water reuse \n(by province)'
-#    scenarios_name = 'Baseline, Water reuse \n(by province), Water reuse \n(per cluster)'   
-#    scenarios_name = [x.strip().replace('\\n','\n') for x in scenarios_name.split(',')]
+
+    # scenarios_name = str(input('Enter the names of the scenarios: '))
+    # scenarios_name = 'Baseline, Water reuse \n(clustering), Water reuse \n(by province)'
+    #    scenarios_name = 'Baseline, Water reuse \n(by province), Water reuse \n(per cluster)'
+    #    scenarios_name = [x.strip().replace('\\n','\n') for x in scenarios_name.split(',')]
     scenarios_name = ['Baseline']
-    scenarios_name.extend([x.replace('- ','\n') for x in scenarios])
-    
+    scenarios_name.extend([x.replace('- ', '\n') for x in scenarios])
+
     dff = data_list[is_baseline - 1].df.loc[data_list[is_baseline - 1].df.Cluster.notna()]
     energy_start = (scenarios_name[0], dff[['IrrigationDesalinationEnergy', 'IrrigationPumpingEnergy']].sum())
     gws_start = dff['TotalWithdrawals'].sum() / \
-                (data_list[is_baseline - 1].df.loc[data_list[is_baseline - 1].df['CI'] == 1,'RechargeRate'].sum() - data_list[is_baseline - 1].df.loc[data_list[is_baseline - 1].df['CI'] == 1,'EnvironmentalFlow'].sum())
-    
+                (data_list[is_baseline - 1].df.loc[data_list[is_baseline - 1].df['CI'] == 1, 'RechargeRate'].sum() -
+                 data_list[is_baseline - 1].df.loc[data_list[is_baseline - 1].df['CI'] == 1, 'EnvironmentalFlow'].sum())
+
     energy_per_cluster = []
     energy_end = {}
-    #scenarios_name[i]: energy_start
+    # scenarios_name[i]: energy_start
     gws_values = [gws_start]
-#    total_withdrawals = data_list[0].df['TotalWithdrawals'].sum()
-    withdrawals_per_cluster =  {}
+    #    total_withdrawals = data_list[0].df['TotalWithdrawals'].sum()
+    withdrawals_per_cluster = {}
     withdrawals_total = {}
     withdrawals_baseline = {}
     tech = {}
     for i, data in enumerate(data_list):
         dff = data.df.loc[data.df.Cluster.notna()]
-        energy_per_cluster.append(dff.groupby('Cluster').agg({'FinalDesalinationEnergy': 'sum', 
-                                                    'FinalPumpingEnergy': 'sum', 
-                                                    'FinalTreatmentEnergy': 'first'}))
+        energy_per_cluster.append(dff.groupby('Cluster').agg({'FinalDesalinationEnergy': 'sum',
+                                                              'FinalPumpingEnergy': 'sum',
+                                                              'FinalTreatmentEnergy': 'first'}))
         energy_end[scenarios_name[i + 1]] = dff.agg({'FinalDesalinationEnergy': 'sum', 'FinalPumpingEnergy': 'sum'})
         energy_end[scenarios_name[i + 1]]['FinalTreatmentEnergy'] = energy_per_cluster[i]['FinalTreatmentEnergy'].sum()
-        gws_end = dff['FinalWaterWithdrawals'].sum() / (data.df.loc[data.df['CI'] == 1,'RechargeRate'].sum() - data.df.loc[data.df['CI'] == 1,'EnvironmentalFlow'].sum())
+        gws_end = dff['FinalWaterWithdrawals'].sum() / (
+                    data.df.loc[data.df['CI'] == 1, 'RechargeRate'].sum() - data.df.loc[
+                data.df['CI'] == 1, 'EnvironmentalFlow'].sum())
         gws_values.append(gws_end)
-        withdrawals_per_cluster[scenarios_name[i + 1]], withdrawals_total[scenarios_name[i + 1]], withdrawals_baseline[scenarios_name[i + 1]] = data.get_water_stats()
+        withdrawals_per_cluster[scenarios_name[i + 1]], withdrawals_total[scenarios_name[i + 1]], withdrawals_baseline[
+            scenarios_name[i + 1]] = data.get_water_stats()
         withdrawals_per_cluster[scenarios_name[i + 1]]['Cluster'] = withdrawals_per_cluster[scenarios_name[i + 1]].index
-        
-        tech[scenarios_name[i + 1]] = dff.groupby('Cluster').agg({'PopulationLeastCostTechnology': 'max', 'IrrigationLeastCostTechnology': 'max',
-                                          'PopulationReclaimedWater': 'first', 'IrrigationReclaimedWater': 'first'})
-    
+
+        tech[scenarios_name[i + 1]] = dff.groupby('Cluster').agg(
+            {'PopulationLeastCostTechnology': 'max', 'IrrigationLeastCostTechnology': 'max',
+             'PopulationReclaimedWater': 'first', 'IrrigationReclaimedWater': 'first'})
+
     withdrawals_total['Baseline'] = withdrawals_baseline[scenarios_name[is_baseline]]
-    
+
     # 'nwsas_1km_tds_sensitivity'
     # 'nwsas_1km_gwd_sensitivity'
     sensitivity_path = {'TDS': str(input('Enter the path of the folder with the sensitivity scenarios for TDS: ')),
-                        'Depth': str(input('Enter the path of the folder with the sensitivity scenarios for depth to groundwater: '))}
+                        'Depth': str(input(
+                            'Enter the path of the folder with the sensitivity scenarios for depth to groundwater: '))}
     sensitivity_variables = {}
     os.chdir('..')
     for key, value in sensitivity_path.items():
         os.chdir(value)
-        sensitivity_variables[key] = [x[1] for x in os.walk('.')][0]  
+        sensitivity_variables[key] = [x[1] for x in os.walk('.')][0]
         os.chdir('..')
     data_list.clear()
     sensitivity_energy = {}
-    
+
     for scenario in scenarios:
-        sensitivity_energy[scenario.replace('- ','\n')] = pd.DataFrame({'Desalination energy': [], 'Pumping energy': []})
-        if scenario.replace('- ','\n') == scenarios_name[is_baseline]:
+        sensitivity_energy[scenario.replace('- ', '\n')] = pd.DataFrame(
+            {'Desalination energy': [], 'Pumping energy': []})
+        if scenario.replace('- ', '\n') == scenarios_name[is_baseline]:
             sensitivity_energy['Baseline'] = pd.DataFrame({'Desalination energy': [], 'Pumping energy': []})
         for key, item in sensitivity_variables.items():
-            print('\nLoading {} sensitivity for {} scenario...'.format(key,scenario))
+            print('\nLoading {} sensitivity for {} scenario...'.format(key, scenario))
             for value in item:
                 os.chdir(sensitivity_path[key] + '/' + value + '/' + scenario)
                 file_name = glob.glob("*.gz")
                 file_name = file_name[0].split('.')[0]
-                sensitivity_data = DataFrame(create_dataframe = False, lyr_names = lyr_names, input_file = file_name, save_csv = False,  cell_area = cell_area)
+                sensitivity_data = DataFrame(create_dataframe=False, lyr_names=lyr_names, input_file=file_name,
+                                             save_csv=False, cell_area=cell_area)
                 sensitivity_data.df = sensitivity_data.df.loc[sensitivity_data.df.Cluster.notna()]
-                sensitivity_energy[scenario.replace('- ','\n')] = sensitivity_energy[scenario.replace('- ','\n')].append(pd.DataFrame({'Desalination energy': sensitivity_data.df.agg({'FinalDesalinationEnergy': 'sum'}).values,
-                           'Pumping energy': sensitivity_data.df.agg({'FinalPumpingEnergy': 'sum'}).values,
-                           'Treatment energy': sensitivity_data.df.groupby('Cluster').agg({'FinalTreatmentEnergy': 'first'}).sum(),
-                           'SensitivityVar': key}),
-                           ignore_index=True)
-                if scenario.replace('- ','\n') == scenarios_name[is_baseline]:
-                    sensitivity_energy['Baseline'] = sensitivity_energy['Baseline'].append(pd.DataFrame({'Desalination energy': sensitivity_data.df.agg({'IrrigationDesalinationEnergy': 'sum'}).values,
-                                               'Pumping energy': sensitivity_data.df.agg({'IrrigationPumpingEnergy': 'sum'}).values,
-                                               'Treatment energy': [0],
-                                               'SensitivityVar': key}),
-                                                                ignore_index=True)
+                sensitivity_energy[scenario.replace('- ', '\n')] = sensitivity_energy[
+                    scenario.replace('- ', '\n')].append(pd.DataFrame(
+                    {'Desalination energy': sensitivity_data.df.agg({'FinalDesalinationEnergy': 'sum'}).values,
+                     'Pumping energy': sensitivity_data.df.agg({'FinalPumpingEnergy': 'sum'}).values,
+                     'Treatment energy': sensitivity_data.df.groupby('Cluster').agg(
+                         {'FinalTreatmentEnergy': 'first'}).sum(),
+                     'SensitivityVar': key}),
+                                                         ignore_index=True)
+                if scenario.replace('- ', '\n') == scenarios_name[is_baseline]:
+                    sensitivity_energy['Baseline'] = sensitivity_energy['Baseline'].append(pd.DataFrame(
+                        {'Desalination energy': sensitivity_data.df.agg({'IrrigationDesalinationEnergy': 'sum'}).values,
+                         'Pumping energy': sensitivity_data.df.agg({'IrrigationPumpingEnergy': 'sum'}).values,
+                         'Treatment energy': [0],
+                         'SensitivityVar': key}),
+                                                                                           ignore_index=True)
                     sensitivity_energy['Baseline']['Scenario'] = 'Baseline'
                     boolean_vec = sensitivity_energy['Baseline'].duplicated(subset=['Desalination energy'], keep=False)
                     sensitivity_energy['Baseline'].loc[boolean_vec, 'Desalination energy'] = None
@@ -549,26 +583,28 @@ elif module == 2:
                     sensitivity_energy['Baseline'].loc[boolean_vec, 'Pumping energy'] = None
                     boolean_vec = sensitivity_energy['Baseline'].duplicated(subset=['Treatment energy'], keep=False)
                     sensitivity_energy['Baseline'].loc[boolean_vec, 'Treatment energy'] = None
-    
-                sensitivity_energy[scenario.replace('- ','\n')]['Scenario'] = scenario.replace('- ','\n')
-                boolean_vec = sensitivity_energy[scenario.replace('- ','\n')].duplicated(subset=['Desalination energy'], keep=False)
-                sensitivity_energy[scenario.replace('- ','\n')].loc[boolean_vec, 'Desalination energy'] = None
-                boolean_vec = sensitivity_energy[scenario.replace('- ','\n')].duplicated(subset=['Pumping energy'], keep=False)
-                sensitivity_energy[scenario.replace('- ','\n')].loc[boolean_vec, 'Pumping energy'] = None
-                boolean_vec = sensitivity_energy[scenario.replace('- ','\n')].duplicated(subset=['Treatment energy'], keep=False)
-                sensitivity_energy[scenario.replace('- ','\n')].loc[boolean_vec, 'Treatment energy'] = None
+
+                sensitivity_energy[scenario.replace('- ', '\n')]['Scenario'] = scenario.replace('- ', '\n')
+                boolean_vec = sensitivity_energy[scenario.replace('- ', '\n')].duplicated(
+                    subset=['Desalination energy'], keep=False)
+                sensitivity_energy[scenario.replace('- ', '\n')].loc[boolean_vec, 'Desalination energy'] = None
+                boolean_vec = sensitivity_energy[scenario.replace('- ', '\n')].duplicated(subset=['Pumping energy'],
+                                                                                          keep=False)
+                sensitivity_energy[scenario.replace('- ', '\n')].loc[boolean_vec, 'Pumping energy'] = None
+                boolean_vec = sensitivity_energy[scenario.replace('- ', '\n')].duplicated(subset=['Treatment energy'],
+                                                                                          keep=False)
+                sensitivity_energy[scenario.replace('- ', '\n')].loc[boolean_vec, 'Treatment energy'] = None
                 os.chdir('../../..')
-                
-        
+
     class_name_pop = {'0': 'NaN', '1': 'Extended aeration', '2': 'Membrane bioreactor',
                       '3': 'Sequencing batch reactor', '4': 'Rotating biological contractors',
                       '5': 'Intermittent sand filter', '6': 'Trickling filter',
                       '7': 'Moving bed biofilm reactor'}
     class_name_agri = {'0': 'NaN', '1': 'Pond system', '2': 'Wetlands'}
-    
+
     # order = ['Baseline','WWR FreeWapha *','WWR SubWapha *','WWR PrivWapha *','WWR HighWapc *','WWR LowWapc *','WWR per cluster','WWR by province']
     # order = ['Baseline','WWR by province','WWR per cluster']
-    
+
     if keep_scenario == 'n':
         gws_values.pop(is_baseline)
         scenario = scenarios_name.pop(is_baseline)
@@ -578,55 +614,35 @@ elif module == 2:
         withdrawals_per_cluster.pop(scenario)
         tech.pop(scenario)
     order = scenarios_name
-    
+
     os.chdir(folder_path)
     gws_plot(gws_values, scenarios_name, order)
     energy_plot(energy_start, energy_end, sensitivity_energy, order)
     water_plot(withdrawals_total, order)
     water_plot_per_cluster(withdrawals_per_cluster, cluster, admin_names)
     tech_plot(tech, class_name_pop, class_name_agri, order)
-    
-#    path = '/Users/camo/Documents/SEE Master/Master Thesis/Python Model/NWSAS_1km - Results/Water reuse - (per cluster)'
-##    centroids = centroid(data_list[1])
-##    save_layers(path, centroids, 'Centroid') 
-#    save_layers(path, data_list[1].df, 'IrrigatedArea')
-    
+
+    #    path = '/Users/camo/Documents/SEE Master/Master Thesis/Python Model/NWSAS_1km - Results/Water reuse - (per cluster)'
+    ##    centroids = centroid(data_list[1])
+    ##    save_layers(path, centroids, 'Centroid')
+    #    save_layers(path, data_list[1].df, 'IrrigatedArea')
+
     for scenario in order[1:]:
-        sensTDS = sensitivity_energy[scenario].loc[sensitivity_energy[scenario]['SensitivityVar'] == 'TDS','Desalination energy']
+        sensTDS = sensitivity_energy[scenario].loc[
+            sensitivity_energy[scenario]['SensitivityVar'] == 'TDS', 'Desalination energy']
         enerTDS = energy_end[scenario].loc['Desalination energy']
-        
-        sensDepth = sensitivity_energy[scenario].loc[sensitivity_energy[scenario]['SensitivityVar'] == 'Depth','Pumping energy']
+
+        sensDepth = sensitivity_energy[scenario].loc[
+            sensitivity_energy[scenario]['SensitivityVar'] == 'Depth', 'Pumping energy']
         enerDepth = energy_end[scenario].loc['Pumping energy']
-        
+
         enerTreat = energy_end[scenario].loc['Treatment energy']
-        
+
         print(scenario + ': \n    - Desalination energy: ' +
-              str(round((sensTDS[1] - enerDepth - enerTreat - enerTDS)/enerTDS * 100,2)) + '% to ' +
-              str(round((sensTDS[0] - enerDepth - enerTreat - enerTDS)/enerTDS* 100,2)) + '%')
-        
+              str(round((sensTDS[1] - enerDepth - enerTreat - enerTDS) / enerTDS * 100, 2)) + '% to ' +
+              str(round((sensTDS[0] - enerDepth - enerTreat - enerTDS) / enerTDS * 100, 2)) + '%')
+
         print('    - Pumping energy: ' +
-              str(round((sensDepth[3] - enerDepth - enerTreat)/enerDepth *100,2)) + '% to ' +
-              str(round((sensDepth[2] - enerDepth - enerTreat)/enerDepth *100,2)) + '%')
+              str(round((sensDepth[3] - enerDepth - enerTreat) / enerDepth * 100, 2)) + '% to ' +
+              str(round((sensDepth[2] - enerDepth - enerTreat) / enerDepth * 100, 2)) + '%')
         print('')
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-     
