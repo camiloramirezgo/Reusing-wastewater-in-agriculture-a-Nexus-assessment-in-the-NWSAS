@@ -197,18 +197,18 @@ if module == 1:
 
             if calibrate_pop == "all":
                 all_procedures = True
-                enter_irrigation_system = "y"
+                calibrate_irrigated_area = "y"
                 calculate_population_water = "y"
-                enter_groundwater_stress = "y"
+                calculate_groundwater_stress = "y"
                 calculate_groundwater_pumping = "y"
                 calculate_desalinisation = "y"
                 calculate_treatment = "y"
                 create_csv_tables = "y"
             else:
-                enter_irrigation_system = str(
+                calibrate_irrigated_area = str(
                     input('Calibrate irrigated area and calculate irrigation water needs? (y/n): ')).lower()
                 calculate_population_water = str(input('Calculate population water needs? (y/n): ')).lower()
-                enter_groundwater_stress = str(input('Calculate Groundwater Stress indicator? (y/n): ')).lower()
+                calculate_groundwater_stress = str(input('Calculate Groundwater Stress indicator? (y/n): ')).lower()
                 calculate_groundwater_pumping = str(input('Calculate Groundwater pumping energy? (y/n): ')).lower()
                 calculate_desalinisation = str(input('Calculate desalination energy? (y/n): ')).lower()
                 calculate_treatment = str(input('Calculate treatment system? (y/n): ')).lower()
@@ -232,9 +232,13 @@ if module == 1:
                     specs.loc[specs[SPE_REGION] == region, SPE_URBAN_CUTOFF] = urban_cutoff
                     specs.loc[specs[SPE_REGION] == region, SPE_URBAN_MODELLED] = urban_modelled
 
-            if enter_irrigation_system == 'y':
+            if calibrate_irrigated_area == 'y':
                 print('\nCalibrating irrigation area and calculating irrigation water needs...')
                 data.df['IrrigatedAreaFuture'] = None
+                data.df['IrrigatedAreaAverage'] = None
+                data.df['IrrigationWater'] = None
+                data.df['IrrigationWaterFuture'] = None
+                data.df['IrrigationWaterAverage'] = None
                 for region in specs[SPE_REGION]:
                     print('    - Region {}...'.format(region))
                     total_irrigated_area = float(specs.loc[specs[SPE_REGION] == region, SPE_IRRIGATED_AREA])
@@ -247,13 +251,15 @@ if module == 1:
 
             if calculate_population_water == 'y':
                 print('\nCalculating population water needs...')
+                data.df['PopulationWaterFuture'] = None
+                data.df['PopulationWaterAverage'] = None
                 for region in specs[SPE_REGION]:
                     print('    - Region {}...'.format(region))
                     urban_uni_water = float(specs.loc[specs[SPE_REGION] == region, SPE_URBAN_WATER])
                     rural_uni_water = float(specs.loc[specs[SPE_REGION] == region, SPE_RURAL_WATER])
                     data.calculate_population_water(region, urban_uni_water, rural_uni_water)
 
-            if enter_groundwater_stress == 'y':
+            if calculate_groundwater_stress == 'y':
                 print('\nCalculating Groundwater Stress indicator...')
                 data.total_withdrawals()
                 data.df['RechargeRate'] = 0
@@ -292,9 +298,9 @@ if module == 1:
                     data.reverse_osmosis_energy(region, threshold, osmosis_system)
 
             print('\nCalculating irrigation energy needs...')
-            for region in specs[SPE_REGION]:
-                print('    - Region {}...'.format(region))
-                data.total_irrigation_energy()
+            # for region in specs[SPE_REGION]:
+            #     print('    - Region {}...'.format(region))
+            data.total_irrigation_energy()
 
             if clustering == 'y':
                 print('\nRunning clustering algorithm for population and irrigated land areas...')
@@ -317,6 +323,9 @@ if module == 1:
             data.df['PopulationWaterPerCluster'] = None
             data.df['PopulationWaterFuturePerCluster'] = None
             data.df['IrrigationWaterPerCluster'] = None
+            data.df['IrrigationWaterFuturePerCluster'] = None
+            data.df['PopulationWaterAveragePerCluster'] = None
+            data.df['IrrigationWaterAveragePerCluster'] = None
 
             print('\nCalculating per-cluster data...')
             for cluster in set(data.df['Cluster'].dropna()):
@@ -325,21 +334,38 @@ if module == 1:
                 data.calculate_per_cluster(cluster, 'IrrigatedArea', 'IrrigatedArea', SPE_MIN_IRRIGATED)
                 data.calculate_per_cluster(cluster, 'IrrigatedAreaFuture', 'IrrigatedArea', SPE_MIN_IRRIGATED)
                 data.calculate_per_cluster(cluster, 'PopulationWater', 'PopulationFuture', SPE_MIN_POP)
-                data.calculate_per_cluster(cluster, 'IrrigationWater', 'IrrigatedArea', SPE_MIN_IRRIGATED)
+                data.calculate_per_cluster(cluster, 'IrrigationWater', 'IrrigatedAreaFuture', SPE_MIN_IRRIGATED)
+                data.calculate_per_cluster(cluster, 'PopulationWaterFuture', 'PopulationFuture', SPE_MIN_POP)
+                data.calculate_per_cluster(cluster, 'IrrigationWaterFuture', 'IrrigatedAreaFuture', SPE_MIN_IRRIGATED)
+                data.calculate_per_cluster(cluster, 'PopulationWaterAverage', 'PopulationFuture', SPE_MIN_POP)
+                data.calculate_per_cluster(cluster, 'IrrigationWaterAverage', 'IrrigatedAreaFuture', SPE_MIN_IRRIGATED)
+
+            # print(data.df['IrrigationWaterPerCluster'].notna().sum())
 
             print('\nCalculating final water extractions and reuse share...')
-            data.calculate_reclaimed_water(POP_WATER_FRACTION, AGRI_WATER_FRACTION)
+            #data.calculate_reclaimed_water(POP_WATER_FRACTION, AGRI_WATER_FRACTION)
             data.get_eto(SPE_ETO, SPE_LAT, SPE_ELEVATION, SPE_WIND, SPE_SRAD, SPE_TMIN, SPE_TMAX, SPE_TAVG)
             data.get_storage(leakage=0.9, area_percent=0.02, storage_depth=3, agri_water_req=AGRI_WATER_REQ,
                              agri_non_recoverable=AGRI_NON_RECOVERABLE)
-            data.reused_water(pop_percentage_of_reuse=POP_REUSED_WATER)
+            data.reused_water(pop_water_fraction=POP_WATER_FRACTION, pop_percentage_of_reuse=POP_REUSED_WATER)
+
+            data.get_storage(leakage=0.9, area_percent=0.02, storage_depth=3, agri_water_req=AGRI_WATER_REQ,
+                             agri_non_recoverable=AGRI_NON_RECOVERABLE, time='Average')
+            data.reused_water(pop_water_fraction=POP_WATER_FRACTION, pop_percentage_of_reuse=POP_REUSED_WATER, time='Average')
+
+            data.get_storage(leakage=0.9, area_percent=0.02, storage_depth=3, agri_water_req=AGRI_WATER_REQ,
+                             agri_non_recoverable=AGRI_NON_RECOVERABLE, time='Future')
+            data.reused_water(pop_water_fraction=POP_WATER_FRACTION, pop_percentage_of_reuse=POP_REUSED_WATER,
+                              time='Future')
 
             if calculate_treatment == 'y':
                 years = float(specs.loc[0, SPE_END_YEAR] - specs.loc[0, SPE_START_YEAR])
+                data.df['IrrigatedGrowthPerCluster'] = 0
                 data.df['PopulationGrowthPerCluster'] = (data.df['PopulationFuturePerCluster'] / \
                                                          data.df['PopulationPerCluster']) ** (1. / years) - 1
                 data.df['IrrigatedGrowthPerCluster'] = (data.df['IrrigatedAreaFuturePerCluster'] / \
                                                         data.df['IrrigatedAreaPerCluster']) ** (1. / years) - 1
+
 
                 data.population_opex = {}
                 for name, system in treatment_systems_pop.items():
@@ -353,9 +379,9 @@ if module == 1:
                                                                      water_fraction=POP_WATER_FRACTION,
                                                                      parameter='OPEXFunction', variable='Population',
                                                                      years=years)
-                    data.calculate_treatment_energy(treatment_system_name=name + 'Energy', treatment_system=system,
+                    data.calculate_treatment_energy(treatment_system_name=name + 'AverageEnergy', treatment_system=system,
                                                     values=func_variables,
-                                                    parameter='EnergyFunction', variable='Population')
+                                                    parameter='EnergyFunction', variable='Population', time='Average')
 
                 data.irrigation_opex = {}
                 for name, system in treatment_systems_agri.items():
@@ -369,9 +395,9 @@ if module == 1:
                                                                      water_fraction=AGRI_WATER_FRACTION,
                                                                      parameter='OPEXFunction', variable='Irrigation',
                                                                      years=years)
-                    data.calculate_treatment_energy(treatment_system_name=name + 'Energy', treatment_system=system,
+                    data.calculate_treatment_energy(treatment_system_name=name + 'AverageEnergy', treatment_system=system,
                                                     values=func_variables,
-                                                    parameter='EnergyFunction', variable='Irrigation')
+                                                    parameter='EnergyFunction', variable='Irrigation', time='Average')
 
             print('\nCalculating LCOWs for each treatment technology:')
             calculate_lcows(data, clusters=SPE_CLUSTER_NUM, variable='Population', water_fraction=POP_WATER_FRACTION,
@@ -399,7 +425,7 @@ if module == 1:
             print('\nCalculating final Groundwater Stress indicator...')
             for region in specs[SPE_REGION]:
                 print('    - Region {}...'.format(region))
-                data.groundwater_stress(region, data.df['FinalWaterWithdrawals'], 'GroundwaterStressEnd')
+                data.groundwater_stress(region, data.df['FinalAverageWaterWithdrawals'], 'Average')
 
             if create_csv_tables == 'y':
                 print('\nCreating results files...')
@@ -426,10 +452,12 @@ if module == 1:
 
                 save_layers(scenario_folder, data.df,
                             'GroundwaterStress',
-                            'GroundwaterStressEnd',
+                            'GroundwaterStressAverage',
                             'LeastCostSystem',
                             'Cluster',
-                            'IrrigatedArea')
+                            'IrrigatedArea',
+                            'FinalAverageEnergy',
+                            'FinalAverageWaterWithdrawals')
 
                 print('    - Saving {} scenario dataframe...'.format(scenario))
                 data.df.to_csv(scenario_folder + '/' + scenario + '.gz', index=False)
@@ -444,7 +472,6 @@ if module == 1:
             print(set(data.df['LeastCostSystem'].dropna()))
             print(class_name)
 
-
         elif choice == 3:
             print("\n...")
 
@@ -453,7 +480,6 @@ if module == 1:
     print('\nTotal enlapsed time')
     print(str(int(minutes // 60)) + ' hours, ' + str(int(minutes % 60)) + ' min, ' + str(
         round((end_time - start_time) % 60, 2)) + ' sec')
-
 
 elif module == 2:
     #    number_of_files = int(input('Enter the amount of files to load: '))
