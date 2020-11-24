@@ -11,7 +11,7 @@ import time
 # Column names of the input data table, containing all layers information,
 # this names must match the names of such columns, or if the dataframe is beign created,
 # then the names of each layer file must match the ones defined here.
-FN_REGION = 'Region'
+FN_REGION = 'Province'
 FN_X_COORDINATE = "X"  # X coordinate field name
 FN_Y_COORDINATE = "Y"  # Y coordinate field name
 FN_ELEVATION = "Elevation"  # Elevation layer field name
@@ -33,7 +33,8 @@ FN_GWS_END = 'GroundwaterStressEnd'
 FN_CLUSTER = 'Cluster'
 
 # Columns in the specs file must match these exactly
-SPE_REGION = 'Region'
+SPE_POP_REGION = 'Region'
+SPE_REGION = 'Province'
 SPE_START_YEAR = 'StartYear'
 SPE_END_YEAR = 'EndYear'
 SPE_POP = 'PopulationStartYear'  # The actual population in the base year
@@ -41,8 +42,8 @@ SPE_URBAN = 'UrbanRatioStartYear'  # The ratio of urban population (range 0 - 1)
 SPE_POP_FUTURE = 'PopulationEndYear'
 SPE_URBAN_FUTURE = 'UrbanRatioEndYear'
 SPE_URBAN_MODELLED = 'UrbanRatioModelled'  # The urban ratio in the model after calibration (for comparison)
-SPE_URBAN_CUTOFF = 'UrbanCutOff'  # The urban cutoff population calirated by the model, in people per km2
-SPE_URBAN_GROWTH = 'UrbanGrowth'  # The urban growth rate as a simple multplier (urban pop future / urban pop present)
+SPE_URBAN_CUTOFF = 'UrbanCutOff'  # The urban cutoff population calibrated by the model, in people per km2
+SPE_URBAN_GROWTH = 'UrbanGrowth'  # The urban growth rate as a simple multiplier (urban pop future / urban pop present)
 SPE_RURAL_GROWTH = 'RuralGrowth'  # Same as for urban
 SPE_URBAN_WATER = 'UrbanPopWaterUni'
 SPE_RURAL_WATER = 'RuralPopWaterUni'
@@ -71,7 +72,7 @@ SPE_ETO = 'eto'
 SPE_TDS_THRESHOLD = 'tdsThreshold'
 
 SPE_MIN_POP = 30
-SPE_MIN_IRRIGATED = 3
+SPE_MIN_IRRIGATED = 10
 SPE_CLUSTER_NUM = 40
 POP_WATER_FRACTION = 0.7
 POP_REUSED_WATER = 0.9
@@ -127,7 +128,7 @@ module = int(input('Select module: 1) Scenario analysis 2) Graphics 3) Cancel: '
 
 if module == 1:
     # specs_path = str(input("Enter the path for the excel file containing all scenarios specifications: "))
-    specs_path = 'Scenarios.xlsx'
+    specs_path = 'Scenarios - provinces.xlsx'
     xls_specs = pd.ExcelFile(specs_path)
 
     input_scenarios = str(input(
@@ -161,9 +162,9 @@ if module == 1:
                               file_name=file_name, save_csv=True, cell_area=cell_area)
     elif create_dataframe == 2:
         # file_name = str(input('Enter the name of the input file: '))
-        file_name = 'nwsas_10km_data.gz'
+        file_name = 'nwsas_1km_input_data.gz'
         # cell_area = int(input('Enter the cell area size in km: '))
-        cell_area = 10
+        cell_area = 1
         main_data = DataFrame(create_dataframe=False, lyr_names=lyr_names, input_file=file_name, save_csv=False,
                               cell_area=cell_area)
     elif create_dataframe == 3:
@@ -218,19 +219,19 @@ if module == 1:
                 print('\nCalibrating population...')
                 data.df[lyr_names["IsUrban"]] = 0
                 data.df[lyr_names["PopulationFuture"]] = None
-                for region in specs[SPE_REGION]:
+                for region in specs[SPE_POP_REGION].unique():
                     print('    - Region {}...'.format(region))
-                    pop_actual = float(specs.loc[specs[SPE_REGION] == region, SPE_POP])
-                    pop_future = float(specs.loc[specs[SPE_REGION] == region, SPE_POP_FUTURE])
-                    urban_current = float(specs.loc[specs[SPE_REGION] == region, SPE_URBAN])
-                    urban_future = float(specs.loc[specs[SPE_REGION] == region, SPE_URBAN_FUTURE])
+                    pop_actual = float(specs.loc[specs[SPE_POP_REGION] == region, SPE_POP].mean())
+                    pop_future = float(specs.loc[specs[SPE_POP_REGION] == region, SPE_POP_FUTURE].mean())
+                    urban_current = float(specs.loc[specs[SPE_POP_REGION] == region, SPE_URBAN].mean())
+                    urban_future = float(specs.loc[specs[SPE_POP_REGION] == region, SPE_URBAN_FUTURE].mean())
                     urban_cutoff = 0
 
                     urban_cutoff, urban_modelled = data.calibrate_pop_and_urban(region, pop_actual, pop_future,
                                                                                 urban_current,
                                                                                 urban_future, urban_cutoff)
-                    specs.loc[specs[SPE_REGION] == region, SPE_URBAN_CUTOFF] = urban_cutoff
-                    specs.loc[specs[SPE_REGION] == region, SPE_URBAN_MODELLED] = urban_modelled
+                    specs.loc[specs[SPE_POP_REGION] == region, SPE_URBAN_CUTOFF] = urban_cutoff
+                    specs.loc[specs[SPE_POP_REGION] == region, SPE_URBAN_MODELLED] = urban_modelled
 
             if calibrate_irrigated_area == 'y':
                 print('\nCalibrating irrigation area and calculating irrigation water needs...')
@@ -243,8 +244,9 @@ if module == 1:
                     print('    - Region {}...'.format(region))
                     total_irrigated_area = float(specs.loc[specs[SPE_REGION] == region, SPE_IRRIGATED_AREA])
                     irrigation_per_ha = float(specs.loc[specs[SPE_REGION] == region, SPE_IRRIGATION_WATER])
-                    irrigated_area_growth = float(specs.loc[specs[SPE_REGION] == region, SPE_IRRIGATED_AREA_FUTURE]) / \
-                                            float(specs.loc[specs[SPE_REGION] == region, SPE_IRRIGATED_AREA])
+                    a = float(specs.loc[specs[SPE_REGION] == region, SPE_IRRIGATED_AREA_FUTURE])
+                    b = float(specs.loc[specs[SPE_REGION] == region, SPE_IRRIGATED_AREA])
+                    irrigated_area_growth = np.divide(a, b, out=np.zeros_like(a), where=b != 0)
 
                     data.calculate_irrigation_system(region, total_irrigated_area, irrigation_per_ha,
                                                      irrigated_area_growth)
@@ -253,10 +255,10 @@ if module == 1:
                 print('\nCalculating population water needs...')
                 data.df['PopulationWaterFuture'] = None
                 data.df['PopulationWaterAverage'] = None
-                for region in specs[SPE_REGION]:
+                for region in specs[SPE_POP_REGION].unique():
                     print('    - Region {}...'.format(region))
-                    urban_uni_water = float(specs.loc[specs[SPE_REGION] == region, SPE_URBAN_WATER])
-                    rural_uni_water = float(specs.loc[specs[SPE_REGION] == region, SPE_RURAL_WATER])
+                    urban_uni_water = float(specs.loc[specs[SPE_POP_REGION] == region, SPE_URBAN_WATER].mean())
+                    rural_uni_water = float(specs.loc[specs[SPE_POP_REGION] == region, SPE_RURAL_WATER].mean())
                     data.calculate_population_water(region, urban_uni_water, rural_uni_water)
 
             if calculate_groundwater_stress == 'y':
@@ -329,16 +331,16 @@ if module == 1:
 
             print('\nCalculating per-cluster data...')
             for cluster in set(data.df['Cluster'].dropna()):
-                data.calculate_per_cluster(cluster, 'Population', 'PopulationFuture', SPE_MIN_POP)
-                data.calculate_per_cluster(cluster, 'PopulationFuture', 'PopulationFuture', SPE_MIN_POP)
+                data.calculate_per_cluster(cluster, 'Population', 'Population', SPE_MIN_POP)
+                data.calculate_per_cluster(cluster, 'PopulationFuture', 'Population', SPE_MIN_POP)
                 data.calculate_per_cluster(cluster, 'IrrigatedArea', 'IrrigatedArea', SPE_MIN_IRRIGATED)
                 data.calculate_per_cluster(cluster, 'IrrigatedAreaFuture', 'IrrigatedArea', SPE_MIN_IRRIGATED)
-                data.calculate_per_cluster(cluster, 'PopulationWater', 'PopulationFuture', SPE_MIN_POP)
-                data.calculate_per_cluster(cluster, 'IrrigationWater', 'IrrigatedAreaFuture', SPE_MIN_IRRIGATED)
-                data.calculate_per_cluster(cluster, 'PopulationWaterFuture', 'PopulationFuture', SPE_MIN_POP)
-                data.calculate_per_cluster(cluster, 'IrrigationWaterFuture', 'IrrigatedAreaFuture', SPE_MIN_IRRIGATED)
-                data.calculate_per_cluster(cluster, 'PopulationWaterAverage', 'PopulationFuture', SPE_MIN_POP)
-                data.calculate_per_cluster(cluster, 'IrrigationWaterAverage', 'IrrigatedAreaFuture', SPE_MIN_IRRIGATED)
+                data.calculate_per_cluster(cluster, 'PopulationWater', 'Population', SPE_MIN_POP)
+                data.calculate_per_cluster(cluster, 'IrrigationWater', 'IrrigatedArea', SPE_MIN_IRRIGATED)
+                data.calculate_per_cluster(cluster, 'PopulationWaterFuture', 'Population', SPE_MIN_POP)
+                data.calculate_per_cluster(cluster, 'IrrigationWaterFuture', 'IrrigatedArea', SPE_MIN_IRRIGATED)
+                data.calculate_per_cluster(cluster, 'PopulationWaterAverage', 'Population', SPE_MIN_POP)
+                data.calculate_per_cluster(cluster, 'IrrigationWaterAverage', 'IrrigatedArea', SPE_MIN_IRRIGATED)
 
             # print(data.df['IrrigationWaterPerCluster'].notna().sum())
 
@@ -395,9 +397,17 @@ if module == 1:
                                                                      water_fraction=AGRI_WATER_FRACTION,
                                                                      parameter='OPEXFunction', variable='Irrigation',
                                                                      years=years)
-                    data.calculate_treatment_energy(treatment_system_name=name + 'AverageEnergy', treatment_system=system,
+                    data.calculate_treatment_energy(treatment_system_name=name + 'Energy', treatment_system=system,
+                                                    values=func_variables,
+                                                    parameter='EnergyFunction', variable='Irrigation', time='')
+                    data.calculate_treatment_energy(treatment_system_name=name + 'AverageEnergy',
+                                                    treatment_system=system,
                                                     values=func_variables,
                                                     parameter='EnergyFunction', variable='Irrigation', time='Average')
+                    data.calculate_treatment_energy(treatment_system_name=name + 'FutureEnergy',
+                                                    treatment_system=system,
+                                                    values=func_variables,
+                                                    parameter='EnergyFunction', variable='Irrigation', time='Future')
 
             print('\nCalculating LCOWs for each treatment technology:')
             calculate_lcows(data, clusters=SPE_CLUSTER_NUM, variable='Population', water_fraction=POP_WATER_FRACTION,
@@ -420,7 +430,7 @@ if module == 1:
                                                 class_name_pop, class_name_agri)
 
             print('\nCalculating final energy requirements...')
-            data.calculate_final_energy(class_name_pop, class_name_agri)
+            data.calculate_final_energy(class_name_pop, class_name_agri, 'Average')
 
             print('\nCalculating final Groundwater Stress indicator...')
             for region in specs[SPE_REGION]:

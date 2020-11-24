@@ -195,7 +195,10 @@ class DataFrame:
         """
         is_region = self.is_region(region)
 
-        area_ratio = total_irrigated_area / self.df.loc[is_region, self.lyr_names["IrrigatedArea"]].sum()
+        if self.df.loc[is_region, "IrrigatedArea"].sum() == 0:
+            area_ratio = 0
+        else:
+            area_ratio = total_irrigated_area / self.df.loc[is_region, "IrrigatedArea"].sum()
 
         self.df.loc[is_region, self.lyr_names['IrrigatedArea']] = self.df.loc[is_region, self.lyr_names[
             'IrrigatedArea']] * area_ratio
@@ -218,14 +221,14 @@ class DataFrame:
         self.df.loc[is_region & is_urban,
                     'PopulationWater'] = self.df.loc[is_region & is_urban, "Population"] * urban_uni_water
         self.df.loc[is_region & (1 - is_urban),
-                    'PopulationWater'] = self.df.loc[is_region & (1 - is_urban), "PopulationFuture"] * rural_uni_water
+                    'PopulationWater'] = self.df.loc[is_region & (1 - is_urban), "Population"] * rural_uni_water
         self.df.loc[is_region & is_urban,
                     'PopulationWaterFuture'] = self.df.loc[is_region & is_urban, "PopulationFuture"] * urban_uni_water
         self.df.loc[is_region & (1 - is_urban),
                     'PopulationWaterFuture'] = self.df.loc[is_region & (1 - is_urban),
                                                            "PopulationFuture"] * rural_uni_water
         self.df.loc[is_region, 'PopulationWaterAverage'] = (self.df.loc[is_region, 'PopulationWater'] +
-                                                                        self.df.loc[is_region, 'PopulationWaterFuture']) / 2
+                                                            self.df.loc[is_region, 'PopulationWaterFuture']) / 2
 
     def total_withdrawals(self, region=None):
         """
@@ -436,7 +439,6 @@ class DataFrame:
             water = water_total
             population = population_total
             func = create_function(treatment_system, parameter, values)
-            print('water: ', water.notna().sum())
             self.df.loc[self.df[variable + 'ReclaimedWater'].notna(), treatment_system_name] = eval(func)
 
     def calculate_opex(self, treatment_system_name, treatment_system, values,
@@ -486,7 +488,6 @@ class DataFrame:
             [x * (1 + y) ** year for x, y in np.array(self.df[[variable + 'ReclaimedWater', growth]].dropna())])
 
         self.df[investment_var + '_LCOW'] = None
-        print(investment_var, self.df[investment_var].notna().sum())
 
         a = self.df.loc[self.df[variable + 'ReclaimedWater'].notna(), investment_var]
         b = np.array([sum(x * discount_factor) for x in water])
@@ -516,7 +517,7 @@ class DataFrame:
         self.df[op_cost_var + '_LCOW'] = None
         a = np.array([sum(x * discount_factor) for x in opex_data])
         b = np.array([sum(x * discount_factor) for x in water])
-        self.df.loc[self.df[growth].notna(), op_cost_var + '_LCOW'] = np.divide(a, b, out=np.zeros_like(a),
+        self.df.loc[self.df[variable + 'ReclaimedWater'].notna(), op_cost_var + '_LCOW'] = np.divide(a, b, out=np.zeros_like(a),
                                                                                 where=b != 0)
 
     def calculate_lcow(self, name):
@@ -560,16 +561,13 @@ class DataFrame:
         """
         Calculates the potential reused water per cluster
         """
+        not_na = self.df[f'IrrigationWater{time}PerCluster'].notna()
         self.df[f'Population{time}ReclaimedWater'] = None
         self.df[f'Irrigation{time}ReclaimedWater'] = None
         self.df[f'Population{time}ReclaimedWater'] = self.df[f'PopulationWater{time}PerCluster'].dropna() * pop_water_fraction
-        self.df[f'Irrigation{time}ReclaimedWater'] = self.df.set_index('Cluster').index.map(
-            self.df.groupby('Cluster')[f'Irrigation{time}ReusedWater'].sum())
-        self.df.loc[self.df[f'Irrigation{time}ReclaimedWater'] == 0,
-                    f'Irrigation{time}ReclaimedWater'] = None
-        print(f'Irrigation{time}ReclaimedWater: ', self.df[f'Irrigation{time}ReclaimedWater'].notna().sum())
-        # print(self.df[f'Irrigation{time}ReclaimedWater'].notna().sum())
-        # self.df.loc[self.df[f'Irrigation{time}ReclaimedWater'] == 0, f'Irrigation{time}ReclaimedWater'] = 0 # TODO: FIX!
+        self.df.loc[not_na, f'Irrigation{time}ReclaimedWater'] = self.df.loc[not_na].set_index('Cluster').index.map(
+            self.df.loc[not_na].groupby('Cluster')[f'Irrigation{time}ReusedWater'].sum())
+        self.df.loc[self.df[f'Irrigation{time}ReclaimedWater'] == 0, f'Irrigation{time}ReclaimedWater'] = None
 
     def get_storage(self, leakage, area_percent, storage_depth, agri_water_req, agri_non_recoverable, time=''):
         """
@@ -586,7 +584,6 @@ class DataFrame:
             Depth of the on-farm storage in meters.
         """
         not_na = self.df[f'IrrigationWater{time}PerCluster'].notna()
-        print(f'IrrigationWater{time}PerCluster: ', self.df[f'IrrigationWater{time}PerCluster'].notna().sum())
         self.df.loc[not_na, 'available_storage'] = area_percent * storage_depth * self.df.loc[
             not_na, 'IrrigatedAreaFuture'] * 10000
         self.df.loc[not_na, 'leakage_month'] = (leakage / 1000) * 30 * area_percent * self.df.loc[
@@ -610,13 +607,13 @@ class DataFrame:
         """
         Calculates the total final amount of water extracted for irrigation after reuse
         """
-        self.df[f'Irrigation{time}ReusedWater'] = self.df.filter(regex='stored_[1-9]').sum(axis=1)
-        print(f'Irrigation{time}ReusedWater: ', self.df[f'Irrigation{time}ReusedWater'].notna().sum())
+        not_na = self.df[f'IrrigationWater{time}PerCluster'].notna()
+        self.df.loc[not_na,
+                    f'Irrigation{time}ReusedWater'] = self.df.loc[not_na].filter(regex='stored_[1-9]').sum(axis=1)
         self.calculate_reclaimed_water(pop_water_fraction, time=time)
         # self.df['IrrigationReclaimedWater'] = self.df.set_index('Cluster').index.map(
         # self.df.groupby('Cluster')['IrrigationReusedWater'].sum())
         self.df[f'Final{time}IrrigationWater'] = 0
-        not_na = self.df[f'IrrigationWater{time}PerCluster'].notna()
         self.df.loc[not_na, f'Final{time}IrrigationWater'] = self.df.loc[not_na, f'IrrigationWater{time}'] - self.df.loc[
             not_na, f'Irrigation{time}ReusedWater']
         self.losses = 0
@@ -678,13 +675,13 @@ class DataFrame:
         self.df[f'Final{time}Energy'] = self.df[f'Final{time}PumpingEnergy'] + self.df[f'Final{time}DesalinationEnergy']
 
         systems_vector_pop = self.df['PopulationLeastCostTechnology'].apply(
-            lambda row: treatment_systems_pop[row] + 'Energy')
+            lambda row: treatment_systems_pop[row] + f'{time}Energy')
         systems_vector_agri = self.df['IrrigationLeastCostTechnology'].apply(
-            lambda row: treatment_systems_agri[row] + 'Energy')
+            lambda row: treatment_systems_agri[row] + f'{time}Energy')
         self.df[f'Final{time}PopTreatmentEnergy'] = None
         self.df[f'Final{time}AgriTreatmentEnergy'] = None
-        systems_vector_pop.loc[systems_vector_pop == 'NaEnergy'] = None
-        systems_vector_agri.loc[systems_vector_agri == 'NaEnergy'] = None
+        systems_vector_pop.loc[systems_vector_pop == f'Na{time}Energy'] = None
+        systems_vector_agri.loc[systems_vector_agri == f'Na{time}Energy'] = None
 
         for value in set(systems_vector_pop.dropna()):
             index_vec = systems_vector_pop == value
@@ -1166,7 +1163,7 @@ def water_plot(withdrawals_total, order):
          + geom_text(text_df_2, aes(x='X', y='Y', label='label'), ha='left')
          + expand_limits(x=len(list(withdrawals_total.items())) + 2) + labs(x='Scenario',
                                                                             y='Million cubic meters of water per year (Mm3/yr)'))
-    #    print(p)
+
     p.save('Water.pdf', height=5, width=7.5)
 
 
