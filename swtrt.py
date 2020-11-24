@@ -89,18 +89,18 @@ class DataFrame:
         self.df = copy_data.df.copy()
 
     def is_region(self, value, name='Region', over=False):
-        '''
+        """
         Calculates a boolean vector telling which data cells are from a specific region
-        '''
+        """
         if over:
             return self.df[name] > value
         else:
-            return self.df[self.lyr_names[name]] == value
+            return self.df[name] == value
 
     def is_urban(self):
-        '''
+        """
         Calculates a boolean vector telling which data cells are urban population
-        '''
+        """
         return self.df[self.lyr_names['IsUrban']] == 1
 
     def calibrate_pop_and_urban(self, region, pop_actual, pop_future, urban, urban_future, urban_cutoff):
@@ -195,14 +195,21 @@ class DataFrame:
         """
         is_region = self.is_region(region)
 
-        area_ratio = total_irrigated_area / self.df.loc[is_region, self.lyr_names["IrrigatedArea"]].sum()
+        if self.df.loc[is_region, "IrrigatedArea"].sum() == 0:
+            area_ratio = 0
+        else:
+            area_ratio = total_irrigated_area / self.df.loc[is_region, "IrrigatedArea"].sum()
 
         self.df.loc[is_region, self.lyr_names['IrrigatedArea']] = self.df.loc[is_region, self.lyr_names[
             'IrrigatedArea']] * area_ratio
-        self.df.loc[is_region, self.lyr_names['IrrigationWater']] = irrigation_per_ha * self.df[
-            self.lyr_names['IrrigatedArea']]
-        self.df.loc[is_region, 'IrrigatedAreaFuture'] = self.df.loc[is_region, self.lyr_names[
-            'IrrigatedArea']] * irrigated_area_growth
+        self.df.loc[is_region, 'IrrigatedAreaFuture'] = self.df.loc[is_region,
+                                                                    'IrrigatedArea'] * irrigated_area_growth
+        self.df.loc[is_region, 'IrrigatedAreaAverage'] = (self.df.loc[is_region, 'IrrigatedArea'] +
+                                                            self.df.loc[is_region, 'IrrigatedAreaFuture']) / 2
+        self.df.loc[is_region, 'IrrigationWater'] = irrigation_per_ha * self.df['IrrigatedArea']
+        self.df.loc[is_region, 'IrrigationWaterFuture'] = irrigation_per_ha * self.df['IrrigatedAreaFuture']
+        self.df.loc[is_region, 'IrrigationWaterAverage'] = (self.df.loc[is_region, 'IrrigationWater'] +
+                                                            self.df.loc[is_region, 'IrrigationWaterFuture']) / 2
 
     def calculate_population_water(self, region, urban_uni_water, rural_uni_water):
         """
@@ -211,20 +218,24 @@ class DataFrame:
         is_region = self.is_region(region)
         is_urban = self.is_urban()
 
-        self.df.loc[(is_region) & (is_urban), self.lyr_names['PopulationWater']] = self.df.loc[(is_region) & (is_urban),
-                                                                                               self.lyr_names[
-                                                                                                   "Population"]] * urban_uni_water
-        self.df.loc[(is_region) & (1 - is_urban), self.lyr_names['PopulationWater']] = self.df.loc[
-                                                                                           (is_region) & (1 - is_urban),
-                                                                                           self.lyr_names[
-                                                                                               "Population"]] * rural_uni_water
+        self.df.loc[is_region & is_urban,
+                    'PopulationWater'] = self.df.loc[is_region & is_urban, "Population"] * urban_uni_water
+        self.df.loc[is_region & (1 - is_urban),
+                    'PopulationWater'] = self.df.loc[is_region & (1 - is_urban), "Population"] * rural_uni_water
+        self.df.loc[is_region & is_urban,
+                    'PopulationWaterFuture'] = self.df.loc[is_region & is_urban, "PopulationFuture"] * urban_uni_water
+        self.df.loc[is_region & (1 - is_urban),
+                    'PopulationWaterFuture'] = self.df.loc[is_region & (1 - is_urban),
+                                                           "PopulationFuture"] * rural_uni_water
+        self.df.loc[is_region, 'PopulationWaterAverage'] = (self.df.loc[is_region, 'PopulationWater'] +
+                                                            self.df.loc[is_region, 'PopulationWaterFuture']) / 2
 
     def total_withdrawals(self, region=None):
         """
         Calculates the total water withdrawals per cell area
         """
-        self.df[self.lyr_names['TotalWithdrawals']] = self.df[self.lyr_names['PopulationWater']] + \
-                                                      self.df[self.lyr_names['IrrigationWater']]
+        self.df['TotalWithdrawals'] = self.df['PopulationWater'] + self.df['IrrigationWater']
+        self.df['TotalAverageWithdrawals'] = self.df['PopulationWaterAverage'] + self.df['IrrigationWaterAverage']
 
     def recharge_rate(self, region, recharge_rate, environmental_flow):
         """
@@ -235,15 +246,17 @@ class DataFrame:
         self.df.loc[is_region, 'RechargeRate'] = recharge_rate / 1000 * self.cell_area ** 2 * 1000 ** 2
         self.df.loc[is_region, 'EnvironmentalFlow'] = environmental_flow / 1000 * self.cell_area ** 2 * 1000 ** 2
 
-    def groundwater_stress(self, region, withdrawals, name='GroundwaterStress'):
+    def groundwater_stress(self, region, withdrawals, time=''):
         """
         calculates the groundwater stress of each cell, based on the area annual water withdrawals, 
         the area-average annual recharge rate and the environmental stream flow
         """
         is_region = self.is_region(region)
 
-        self.df.loc[is_region, self.lyr_names[name]] = withdrawals.loc[is_region] \
-                                                       / (self.df.loc[is_region, 'RechargeRate'] - self.df.loc[is_region, 'EnvironmentalFlow'])
+        self.df.loc[is_region, f'GroundwaterStress{time}'] = withdrawals.loc[is_region] / (self.df.loc[is_region,
+                                                                                                'RechargeRate'] -
+                                                                                    self.df.loc[is_region,
+                                                                                                'EnvironmentalFlow'])
 
     def groundwater_pumping_energy(self, region, hours, density, delivered_head, pump_efficiency=1,
                                    calculate_friction=False, viscosity=None, pipe=None):
@@ -252,17 +265,17 @@ class DataFrame:
         and the friction losses (in kWh/m3)
         '''
         is_region = self.is_region(region)
-        flow = self.df.loc[is_region, 'IrrigationWater'] / (hours * 60 * 60)
 
         if calculate_friction:
+            flow = self.df.loc[is_region, 'IrrigationWater'] / (hours * 60 * 60)
             self.df.loc[is_region, 'GWPumpingEnergy'] = (density * 9.81 * (
-                        delivered_head + self.df.loc[is_region, 'GroundwaterDepth']) +
+                    delivered_head + self.df.loc[is_region, 'GroundwaterDepth']) +
                                                          pipe.calculate_pressure_drop(density, flow, viscosity,
                                                                                       self.df.loc[
                                                                                           is_region, 'GroundwaterDepth'])) / 3600000 / pump_efficiency
         else:
             self.df.loc[is_region, 'GWPumpingEnergy'] = (density * 9.81 * (
-                        delivered_head + self.df.loc[is_region, 'GroundwaterDepth'])) / 3600000 / pump_efficiency
+                    delivered_head + self.df.loc[is_region, 'GroundwaterDepth'])) / 3600000 / pump_efficiency
 
     def reverse_osmosis_energy(self, region, threshold, osmosis):
         """
@@ -280,8 +293,8 @@ class DataFrame:
         """
         Aggregates groundwater pumping and desalination energy requirements
         """
-        self.df['IrrigationPumpingEnergy'] = self.df['GWPumpingEnergy'] * self.df['IrrigationWater']
-        self.df['IrrigationDesalinationEnergy'] = self.df['DesalinationEnergy'] * self.df['IrrigationWater']
+        self.df['IrrigationPumpingEnergy'] = self.df['GWPumpingEnergy'] * self.df['IrrigationWaterAverage']
+        self.df['IrrigationDesalinationEnergy'] = self.df['DesalinationEnergy'] * self.df['IrrigationWaterAverage']
         self.df['IrrigationEnergyTotal'] = self.df['IrrigationDesalinationEnergy'] + self.df['IrrigationPumpingEnergy']
 
     def clustering_algorithm(self, population_min, irrigated_min, cluster_num, clusterize):
@@ -290,7 +303,7 @@ class DataFrame:
         """
         if clusterize:
             clustering_vector = self.df.loc[
-                (self.df['Population'] > population_min) | (self.df['IrrigatedArea'] > irrigated_min), ['X', 'Y']]
+                (self.df['PopulationFuture'] > population_min) | (self.df['IrrigatedAreaFuture'] > irrigated_min), ['X', 'Y']]
 
             hc = AgglomerativeClustering(n_clusters=cluster_num, affinity='euclidean', linkage='ward')
             # save clusters for chart
@@ -299,8 +312,8 @@ class DataFrame:
 
             self.newdf = self.df.merge(clustering_vector, on=[self.lyr_names["X"], self.lyr_names["Y"]], how='outer')
         else:
-            self.df.loc[(self.df['Population'] <= population_min) & (
-                        self.df['IrrigatedArea'] <= irrigated_min), 'Cluster'] = None
+            self.df.loc[(self.df['PopulationFuture'] <= population_min) & (
+                    self.df['IrrigatedAreaFuture'] <= irrigated_min), 'Cluster'] = None
 
     def calculate_per_cluster(self, cluster, parameter, variable, min_variable):
         """
@@ -310,25 +323,6 @@ class DataFrame:
         is_type = self.is_region(min_variable, variable, over=True)
         self.df.loc[is_region & is_type, parameter + 'PerCluster'] = self.df.loc[
             is_region & is_type, parameter].sum()
-
-    def calculate_reclaimed_water(self, pop_water_fraction, agri_water_fraction):
-        """
-        Calculates the potential reused water per cluster
-        """
-        pop_growth = self.df['PopulationFuturePerCluster'].dropna() / \
-                     self.df['PopulationPerCluster'].dropna()
-        agri_growth = self.df['IrrigatedAreaFuturePerCluster'].dropna() / \
-                      self.df['IrrigatedAreaPerCluster'].dropna()
-
-        self.df['PopulationReclaimedWater'] = None
-        self.df['IrrigationReclaimedWater'] = None
-        self.df['PopulationReclaimedWater'] = self.df['PopulationWaterPerCluster'].dropna() * pop_water_fraction
-        self.df['PopulationFutureReclaimedWater'] = None
-        self.df['IrrigationFutureReclaimedWater'] = None
-        self.df['PopulationFutureReclaimedWater'] = self.df[
-                                                        'PopulationWaterPerCluster'].dropna() * pop_water_fraction * pop_growth
-        self.df['IrrigationFutureReclaimedWater'] = self.df[
-                                                        'IrrigationWaterPerCluster'].dropna() * agri_water_fraction * agri_growth
 
     def get_evap_i(self, lat, elev, wind, srad, tmin, tmax, tavg, month):
         """
@@ -403,7 +397,7 @@ class DataFrame:
         :rtype: float
         """
         ra_constant = math.log((2 - 2 / 3 * h) / (0.123 * h)) * math.log((2 - 2 / 3 * h) / (0.1 * 0.123 * h)) / (
-                    0.41 ** 2)
+                0.41 ** 2)
         constant = 86400 * 0.622 / (1.01 * 0.287 * ra_constant)
         a1 = (0.408 * (net_rad - shf) * delta_svp /
               (delta_svp + (psy * (1 + (rs / ra_constant) * ws))))
@@ -445,7 +439,7 @@ class DataFrame:
             water = water_total
             population = population_total
             func = create_function(treatment_system, parameter, values)
-            self.df.loc[self.df['Cluster'].notna(), treatment_system_name] = eval(func)
+            self.df.loc[self.df[variable + 'ReclaimedWater'].notna(), treatment_system_name] = eval(func)
 
     def calculate_opex(self, treatment_system_name, treatment_system, values,
                        water_fraction, parameter, variable, years):
@@ -467,12 +461,12 @@ class DataFrame:
         return eval(func)
 
     def calculate_treatment_energy(self, treatment_system_name, treatment_system, values,
-                                   parameter, variable):
+                                   parameter, variable, time=''):
         """
         Calculates the energy requirements for the specified treatment system
         """
         population = self.df.groupby('Cluster').agg({'PopulationFuturePerCluster': 'first'})
-        water = self.df.groupby('Cluster').agg({variable + 'ReclaimedWater': 'first'})
+        water = self.df.groupby('Cluster').agg({variable + f'{time}ReclaimedWater': 'first'})
         func = create_function(treatment_system, parameter, values)
         self.df[treatment_system_name] = self.df['Cluster'].map(eval(func).iloc[:, 0])
 
@@ -482,9 +476,9 @@ class DataFrame:
         Calculates the levelised cost of water for the capex
         """
 
-        if variable == 'Population':
+        if 'Population' in variable:
             growth = 'PopulationGrowthPerCluster'
-        elif variable == 'Irrigation':
+        elif 'Irrigation' in variable:
             growth = 'IrrigatedGrowthPerCluster'
 
         year = np.arange(years + 1)
@@ -495,7 +489,7 @@ class DataFrame:
 
         self.df[investment_var + '_LCOW'] = None
 
-        a = self.df.loc[self.df[variable + 'ReclaimedWater'].notna(), investment_var].dropna()
+        a = self.df.loc[self.df[variable + 'ReclaimedWater'].notna(), investment_var]
         b = np.array([sum(x * discount_factor) for x in water])
         self.df.loc[
             self.df[variable + 'ReclaimedWater'].notna(), investment_var + '_LCOW'] = income_tax_factor * np.divide(a,
@@ -523,7 +517,7 @@ class DataFrame:
         self.df[op_cost_var + '_LCOW'] = None
         a = np.array([sum(x * discount_factor) for x in opex_data])
         b = np.array([sum(x * discount_factor) for x in water])
-        self.df.loc[self.df[growth].notna(), op_cost_var + '_LCOW'] = np.divide(a, b, out=np.zeros_like(a),
+        self.df.loc[self.df[variable + 'ReclaimedWater'].notna(), op_cost_var + '_LCOW'] = np.divide(a, b, out=np.zeros_like(a),
                                                                                 where=b != 0)
 
     def calculate_lcow(self, name):
@@ -532,7 +526,7 @@ class DataFrame:
         """
         self.df[name + 'LCOW'] = self.df[name + 'OPEX_LCOW'] + self.df[name + 'CAPEX_LCOW']
 
-    def least_cost_technology(self, systems: set, variable):
+    def least_cost_technology(self, systems, variable):
         """
         Chooses the least-cost system in the cluster
         """
@@ -563,7 +557,19 @@ class DataFrame:
             class_name[system] = dic_1[system[0]] + ', ' + dic_2[system[1]]
         return class_name
 
-    def get_storage(self, leakage, area_percent, storage_depth, agri_water_req, agri_non_recoverable):
+    def calculate_reclaimed_water(self, pop_water_fraction, time=''):
+        """
+        Calculates the potential reused water per cluster
+        """
+        not_na = self.df[f'IrrigationWater{time}PerCluster'].notna()
+        self.df[f'Population{time}ReclaimedWater'] = None
+        self.df[f'Irrigation{time}ReclaimedWater'] = None
+        self.df[f'Population{time}ReclaimedWater'] = self.df[f'PopulationWater{time}PerCluster'].dropna() * pop_water_fraction
+        self.df.loc[not_na, f'Irrigation{time}ReclaimedWater'] = self.df.loc[not_na].set_index('Cluster').index.map(
+            self.df.loc[not_na].groupby('Cluster')[f'Irrigation{time}ReusedWater'].sum())
+        self.df.loc[self.df[f'Irrigation{time}ReclaimedWater'] == 0, f'Irrigation{time}ReclaimedWater'] = None
+
+    def get_storage(self, leakage, area_percent, storage_depth, agri_water_req, agri_non_recoverable, time=''):
         """
         Calculate the losses in the on-farm storage through the year, based on
         a water balance (leakage + evaporation)
@@ -577,59 +583,61 @@ class DataFrame:
         storage_depth : float
             Depth of the on-farm storage in meters.
         """
-        not_na = self.df['IrrigationWaterPerCluster'].notna()
+        not_na = self.df[f'IrrigationWater{time}PerCluster'].notna()
         self.df.loc[not_na, 'available_storage'] = area_percent * storage_depth * self.df.loc[
-            not_na, 'IrrigatedArea'] * 10000
+            not_na, 'IrrigatedAreaFuture'] * 10000
         self.df.loc[not_na, 'leakage_month'] = (leakage / 1000) * 30 * area_percent * self.df.loc[
-            not_na, 'IrrigatedArea'] * 10000
-        recoverable_water = (self.df.loc[not_na, 'IrrigationWater'] - (
-                    self.df.loc[not_na, agri_water_req] * self.df.loc[not_na, 'IrrigatedArea'] / (
-                        1 - agri_non_recoverable)))
+            not_na, 'IrrigatedAreaFuture'] * 10000
+        recoverable_water = (self.df.loc[not_na, f'IrrigationWater{time}'] - (
+                self.df.loc[not_na, agri_water_req] * self.df.loc[not_na, 'IrrigatedAreaFuture'] / (
+                1 - agri_non_recoverable)))
         recoverable_water[recoverable_water < 0] = 0
         for i in range(1, 13):
             self.df.loc[not_na, f'stored_{i}'] = recoverable_water / 12 - \
                                                  (self.df.loc[not_na, 'leakage_month'] + \
                                                   ((self.df.loc[not_na, f'eto_{i}'] / 1000) * area_percent *
-                                                   self.df.loc[not_na, 'IrrigatedArea'] * 10000))
+                                                   self.df.loc[not_na, 'IrrigatedAreaFuture'] * 10000))
             self.df.loc[not_na & (self.df[f'stored_{i}'] < 0), f'stored_{i}'] = 0
             self.df.loc[not_na, f'stored_percentage_{i}'] = self.df.loc[not_na, f'stored_{i}'] / self.df.loc[
                 not_na, 'available_storage']
             self.df.loc[not_na & (self.df[f'stored_percentage_{i}'] > 1), f'stored_{i}'] = self.df.loc[
                 not_na & (self.df[f'stored_percentage_{i}'] > 1), 'available_storage']
 
-    def reused_water(self, pop_percentage_of_reuse):
+    def reused_water(self, pop_water_fraction, pop_percentage_of_reuse, time=''):
         """
         Calculates the total final amount of water extracted for irrigation after reuse
         """
-        self.df['IrrigationReusedWater'] = self.df.filter(regex='stored_[1-9]').sum(axis=1)
-        self.df['IrrigationReclaimedWater'] = self.df.set_index('Cluster').index.map(
-            self.df.groupby('Cluster')['IrrigationReusedWater'].sum())
-        self.df['FinalIrrigationWater'] = 0
-        not_na = self.df['IrrigationWaterPerCluster'].notna()
-        self.df.loc[not_na, 'FinalIrrigationWater'] = self.df.loc[not_na, 'IrrigationWater'] - self.df.loc[
-            not_na, 'IrrigationReusedWater']
+        not_na = self.df[f'IrrigationWater{time}PerCluster'].notna()
+        self.df.loc[not_na,
+                    f'Irrigation{time}ReusedWater'] = self.df.loc[not_na].filter(regex='stored_[1-9]').sum(axis=1)
+        self.calculate_reclaimed_water(pop_water_fraction, time=time)
+        # self.df['IrrigationReclaimedWater'] = self.df.set_index('Cluster').index.map(
+        # self.df.groupby('Cluster')['IrrigationReusedWater'].sum())
+        self.df[f'Final{time}IrrigationWater'] = 0
+        self.df.loc[not_na, f'Final{time}IrrigationWater'] = self.df.loc[not_na, f'IrrigationWater{time}'] - self.df.loc[
+            not_na, f'Irrigation{time}ReusedWater']
         self.losses = 0
-        self.df['PopulationReusedWater'] = 0
+        self.df[f'Population{time}ReusedWater'] = 0
         for cluster in set(self.df['Cluster'].dropna()):
             is_cluster = self.is_region(cluster, 'Cluster')
-            count = self.df.loc[is_cluster, 'IrrigationWaterPerCluster'].dropna().count()
+            count = self.df.loc[is_cluster, f'IrrigationWater{time}PerCluster'].dropna().count()
 
-            pop_water = self.df.loc[is_cluster, 'PopulationReclaimedWater'].dropna().mean() * pop_percentage_of_reuse
+            pop_water = self.df.loc[is_cluster, f'Population{time}ReclaimedWater'].dropna().mean() * pop_percentage_of_reuse
             while (count > 0) and (pop_water > 0):
                 self.df.loc[
-                    (is_cluster) & (not_na) & (self.df['FinalIrrigationWater'] > 0), 'FinalIrrigationWater'] -= (
-                            pop_water / count)
+                    (is_cluster) & (not_na) & (self.df[f'Final{time}IrrigationWater'] > 0), f'Final{time}IrrigationWater'] -= (
+                        pop_water / count)
                 self.df.loc[
-                    (is_cluster) & (not_na) & (self.df['FinalIrrigationWater'] > 0), 'PopulationReusedWater'] += (
-                            pop_water / count)
+                    (is_cluster) & (not_na) & (self.df[f'Final{time}IrrigationWater'] > 0), f'Population{time}ReusedWater'] += (
+                        pop_water / count)
                 remaining_water = self.df.loc[
-                    (is_cluster) & (self.df['FinalIrrigationWater'] < 0), 'FinalIrrigationWater'].dropna().sum()
-                self.df.loc[(is_cluster) & (self.df['FinalIrrigationWater'] < 0), 'FinalIrrigationWater'] = 0
+                    (is_cluster) & (self.df[f'Final{time}IrrigationWater'] < 0), f'Final{time}IrrigationWater'].dropna().sum()
+                self.df.loc[(is_cluster) & (self.df[f'Final{time}IrrigationWater'] < 0), f'Final{time}IrrigationWater'] = 0
                 count = self.df.loc[
-                    (is_cluster) & (not_na) & (self.df['FinalIrrigationWater'] > 0), 'FinalIrrigationWater'].count()
+                    (is_cluster) & (not_na) & (self.df[f'Final{time}IrrigationWater'] > 0), f'Final{time}IrrigationWater'].count()
                 pop_water = remaining_water * (-1)
 
-        self.df['FinalWaterWithdrawals'] = self.df[['FinalIrrigationWater', 'PopulationWater']].sum(axis=1)
+        self.df[f'Final{time}WaterWithdrawals'] = self.df[[f'Final{time}IrrigationWater', f'PopulationWater{time}']].sum(axis=1)
 
     def get_water_stats(self):
         """
@@ -637,7 +645,7 @@ class DataFrame:
         """
         df = self.df.loc[self.df.Cluster.notna()]
         withdrawals_per_cluster = df.groupby('Cluster').agg({
-            'FinalWaterWithdrawals': 'sum',
+            'FinalAverageWaterWithdrawals': 'sum',
             'TotalWithdrawals': 'sum',
             'IrrigationReusedWater': 'sum',
             'PopulationReusedWater': 'sum',
@@ -657,33 +665,33 @@ class DataFrame:
 
         return withdrawals_per_cluster, withdrawals_total, withdrawals_baseline
 
-    def calculate_final_energy(self, treatment_systems_pop, treatment_systems_agri):
+    def calculate_final_energy(self, treatment_systems_pop, treatment_systems_agri, time=''):
         """
         Calculates the energy requirements for pumping, desalinating and treatment for each cell area
         """
 
-        self.df['FinalPumpingEnergy'] = self.df['GWPumpingEnergy'] * self.df['FinalIrrigationWater']
-        self.df['FinalDesalinationEnergy'] = self.df['DesalinationEnergy'] * self.df['FinalIrrigationWater']
-        self.df['FinalIrrigationEnergy'] = self.df['FinalPumpingEnergy'] + self.df['FinalDesalinationEnergy']
+        self.df[f'Final{time}PumpingEnergy'] = self.df['GWPumpingEnergy'] * self.df[f'Final{time}WaterWithdrawals']
+        self.df[f'Final{time}DesalinationEnergy'] = self.df['DesalinationEnergy'] * self.df[f'Final{time}WaterWithdrawals']
+        self.df[f'Final{time}Energy'] = self.df[f'Final{time}PumpingEnergy'] + self.df[f'Final{time}DesalinationEnergy']
 
         systems_vector_pop = self.df['PopulationLeastCostTechnology'].apply(
-            lambda row: treatment_systems_pop[row] + 'Energy')
+            lambda row: treatment_systems_pop[row] + f'{time}Energy')
         systems_vector_agri = self.df['IrrigationLeastCostTechnology'].apply(
-            lambda row: treatment_systems_agri[row] + 'Energy')
-        self.df['FinalPopTreatmentEnergy'] = None
-        self.df['FinalAgriTreatmentEnergy'] = None
-        systems_vector_pop.loc[systems_vector_pop == 'NaEnergy'] = None
-        systems_vector_agri.loc[systems_vector_agri == 'NaEnergy'] = None
+            lambda row: treatment_systems_agri[row] + f'{time}Energy')
+        self.df[f'Final{time}PopTreatmentEnergy'] = None
+        self.df[f'Final{time}AgriTreatmentEnergy'] = None
+        systems_vector_pop.loc[systems_vector_pop == f'Na{time}Energy'] = None
+        systems_vector_agri.loc[systems_vector_agri == f'Na{time}Energy'] = None
 
         for value in set(systems_vector_pop.dropna()):
             index_vec = systems_vector_pop == value
-            self.df.loc[index_vec, 'FinalPopTreatmentEnergy'] = self.df.loc[index_vec, value]
+            self.df.loc[index_vec, f'Final{time}PopTreatmentEnergy'] = self.df.loc[index_vec, value]
 
         for value in set(systems_vector_agri.dropna()):
             index_vec = systems_vector_agri == value
-            self.df.loc[index_vec, 'FinalAgriTreatmentEnergy'] = self.df.loc[index_vec, value]
+            self.df.loc[index_vec, f'Final{time}AgriTreatmentEnergy'] = self.df.loc[index_vec, value]
 
-        self.df['FinalTreatmentEnergy'] = self.df[['FinalPopTreatmentEnergy', 'FinalAgriTreatmentEnergy']].sum(axis=1)
+        self.df[f'Final{time}TreatmentEnergy'] = self.df[[f'Final{time}PopTreatmentEnergy', f'Final{time}AgriTreatmentEnergy']].sum(axis=1)
 
     def least_cost_option(self):
         """
@@ -737,8 +745,8 @@ class PipeSystem:
         """
         Re = self.calculate_reynolds(velocity, viscosity)
         return 8 * ((8 / Re) ** 12 + (
-                    (2.457 * (1 / ((7 / Re) ** 0.9) + 0.27 * self.roughness / self.diameter)) ** 16 + (
-                        37530 / Re) ** 16) ** (-1.5)) ** (1 / 12)
+                (2.457 * (1 / ((7 / Re) ** 0.9) + 0.27 * self.roughness / self.diameter)) ** 16 + (
+                37530 / Re) ** 16) ** (-1.5)) ** (1 / 12)
 
     def calculate_pressure_drop(self, density, flow, viscosity, length):
         """
@@ -746,7 +754,7 @@ class PipeSystem:
         """
         velocity = self.calculate_velocity(flow)
         return self.calculate_friction_factor(velocity, viscosity) * (length / self.diameter) * (
-                    density * (velocity ** 2) / 2)
+                density * (velocity ** 2) / 2)
 
 
 class ReverseOsmosis:
@@ -777,7 +785,7 @@ class ReverseOsmosis:
         Calculate the osmotic pressure of the feed water
         """
         return self.osmotic_coefficient * self.molar_concentration(solutes, concentration) * 0.083145 * (
-                    temperature + 273)
+                temperature + 273)
 
     def minimum_energy(self, solutes, concentration, temperature):
         """
@@ -1040,9 +1048,9 @@ def energy_plot(energy_start, energy_end, sensitivity_energy, order):
                                                  'Desalination energy': df_end.loc[
                                                      (df_end['X'] == scenario), 'Y'].sum(),
                                                  'Pumping energy': df_end.loc[(df_end['X'] == scenario) & (
-                                                             df_end['Z'] != 'Desalination energy'), 'Y'].sum(),
+                                                         df_end['Z'] != 'Desalination energy'), 'Y'].sum(),
                                                  'Treatment energy': df_end.loc[(df_end['X'] == scenario) & (
-                                                             df_end['Z'] == 'Treatment energy'), 'Y'].sum()}))
+                                                         df_end['Z'] == 'Treatment energy'), 'Y'].sum()}))
         else:
             item['Desalination energy'] += df_start.loc[
                 (df_start['X'] == scenario) & (df_start['Z'] != 'Desalination energy'), 'Y'].sum()
@@ -1051,9 +1059,9 @@ def energy_plot(energy_start, energy_end, sensitivity_energy, order):
                                                  'Desalination energy': df_start.loc[
                                                      (df_start['X'] == scenario), 'Y'].sum(),
                                                  'Pumping energy': df_start.loc[(df_start['X'] == scenario) & (
-                                                             df_start['Z'] != 'Desalination energy'), 'Y'].sum(),
+                                                         df_start['Z'] != 'Desalination energy'), 'Y'].sum(),
                                                  'Treatment energy': df_start.loc[(df_start['X'] == scenario) & (
-                                                             df_start['Z'] == 'Treatment energy'), 'Y'].sum()}))
+                                                         df_start['Z'] == 'Treatment energy'), 'Y'].sum()}))
         sensitivity_df = sensitivity_df.append(item.melt(id_vars=['Scenario', 'SensitivityVar']))
 
     sensitivity_df = sensitivity_df.dropna(subset=['value'])
@@ -1155,7 +1163,7 @@ def water_plot(withdrawals_total, order):
          + geom_text(text_df_2, aes(x='X', y='Y', label='label'), ha='left')
          + expand_limits(x=len(list(withdrawals_total.items())) + 2) + labs(x='Scenario',
                                                                             y='Million cubic meters of water per year (Mm3/yr)'))
-    #    print(p)
+
     p.save('Water.pdf', height=5, width=7.5)
 
 
