@@ -52,7 +52,7 @@ def set_cropland_share(df, crop_var, geo_boundary = 'global',
                 if crop_share not in df.columns:
                     df[crop_share] = [{}]*df.shape[0]
 
-                df.loc[df[geo_boundary].isin(boundary_name), crop_share] = [crop_var]
+                df.loc[df[geo_boundary].isin(boundary_name), crop_share] = [crop_var] * df.loc[df[geo_boundary].isin(boundary_name)].shape[0]
             else:
                 print('Please provide a geo_boundary (e.g. "Province") and a boundary_name (e.g. "Name of province")')
     return df
