@@ -9,4 +9,7 @@ QGIS/*
 *sensitivity/*
 *.gz
 *.ipynb
+*.csv
+*.pdf
+*.tif
 Test data/*

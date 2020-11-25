@@ -103,12 +103,11 @@ class DataFrame:
         """
         return self.df[self.lyr_names['IsUrban']] == 1
 
-    def calibrate_pop_and_urban(self, region, pop_actual, pop_future, urban, urban_future, urban_cutoff):
+    def calibrate_pop_and_urban(self, geo_boundary, region, pop_actual, pop_future, urban, urban_future, urban_cutoff):
         """
         Calibrate the actual current population, the urban split and forecast the future population
         """
-        urban_cutoff = 100
-        is_region = self.is_region(region)
+        is_region = self.is_region(region, name=geo_boundary)
         is_urban = self.is_urban()
         max_pop = self.df.loc[is_region, self.lyr_names["Population"]].sum()
         # Calculate the ratio between the actual population and the total population from the GIS layer
@@ -189,19 +188,18 @@ class DataFrame:
 
         return urban_cutoff, urban_modelled
 
-    def calculate_irrigation_system(self, region, total_irrigated_area, irrigation_per_ha, irrigated_area_growth):
+    def calculate_irrigation_system(self, geo_boundary, region, total_irrigated_area, irrigation_per_ha, irrigated_area_growth):
         """
         creates a column with the irrigation water needs per cell area
         """
-        is_region = self.is_region(region)
+        is_region = self.is_region(region, name=geo_boundary)
 
         if self.df.loc[is_region, "IrrigatedArea"].sum() == 0:
             area_ratio = 0
         else:
             area_ratio = total_irrigated_area / self.df.loc[is_region, "IrrigatedArea"].sum()
 
-        self.df.loc[is_region, self.lyr_names['IrrigatedArea']] = self.df.loc[is_region, self.lyr_names[
-            'IrrigatedArea']] * area_ratio
+        self.df.loc[is_region, 'IrrigatedArea'] = self.df.loc[is_region, 'IrrigatedArea'] * area_ratio
         self.df.loc[is_region, 'IrrigatedAreaFuture'] = self.df.loc[is_region,
                                                                     'IrrigatedArea'] * irrigated_area_growth
         self.df.loc[is_region, 'IrrigatedAreaAverage'] = (self.df.loc[is_region, 'IrrigatedArea'] +
@@ -211,11 +209,11 @@ class DataFrame:
         self.df.loc[is_region, 'IrrigationWaterAverage'] = (self.df.loc[is_region, 'IrrigationWater'] +
                                                             self.df.loc[is_region, 'IrrigationWaterFuture']) / 2
 
-    def calculate_population_water(self, region, urban_uni_water, rural_uni_water):
+    def calculate_population_water(self, geo_boundary, region, urban_uni_water, rural_uni_water):
         """
         Calculate the population water consumption
         """
-        is_region = self.is_region(region)
+        is_region = self.is_region(region, name=geo_boundary)
         is_urban = self.is_urban()
 
         self.df.loc[is_region & is_urban,
@@ -237,34 +235,34 @@ class DataFrame:
         self.df['TotalWithdrawals'] = self.df['PopulationWater'] + self.df['IrrigationWater']
         self.df['TotalAverageWithdrawals'] = self.df['PopulationWaterAverage'] + self.df['IrrigationWaterAverage']
 
-    def recharge_rate(self, region, recharge_rate, environmental_flow):
+    def recharge_rate(self, geo_boundary, region, recharge_rate, environmental_flow):
         """
         Calculates the recharge rate and environmental flow per cell area
         """
-        is_region = self.is_region(region)
+        is_region = self.is_region(region, name=geo_boundary)
 
         self.df.loc[is_region, 'RechargeRate'] = recharge_rate / 1000 * self.cell_area ** 2 * 1000 ** 2
         self.df.loc[is_region, 'EnvironmentalFlow'] = environmental_flow / 1000 * self.cell_area ** 2 * 1000 ** 2
 
-    def groundwater_stress(self, region, withdrawals, time=''):
+    def groundwater_stress(self, geo_boundary, region, withdrawals, time=''):
         """
         calculates the groundwater stress of each cell, based on the area annual water withdrawals, 
         the area-average annual recharge rate and the environmental stream flow
         """
-        is_region = self.is_region(region)
+        is_region = self.is_region(region, name=geo_boundary)
 
         self.df.loc[is_region, f'GroundwaterStress{time}'] = withdrawals.loc[is_region] / (self.df.loc[is_region,
                                                                                                 'RechargeRate'] -
                                                                                     self.df.loc[is_region,
                                                                                                 'EnvironmentalFlow'])
 
-    def groundwater_pumping_energy(self, region, hours, density, delivered_head, pump_efficiency=1,
+    def groundwater_pumping_energy(self, geo_boundary, region, hours, density, delivered_head, pump_efficiency=1,
                                    calculate_friction=False, viscosity=None, pipe=None):
         '''
         Calculates the energy requirements for pumping groundwater based on the water table level, 
         and the friction losses (in kWh/m3)
         '''
-        is_region = self.is_region(region)
+        is_region = self.is_region(region, name=geo_boundary)
 
         if calculate_friction:
             flow = self.df.loc[is_region, 'IrrigationWater'] / (hours * 60 * 60)
@@ -277,11 +275,11 @@ class DataFrame:
             self.df.loc[is_region, 'GWPumpingEnergy'] = (density * 9.81 * (
                     delivered_head + self.df.loc[is_region, 'GroundwaterDepth'])) / 3600000 / pump_efficiency
 
-    def reverse_osmosis_energy(self, region, threshold, osmosis):
+    def reverse_osmosis_energy(self, geo_boundary, region, threshold, osmosis):
         """
         Calculates the energy required for desalinisation of groundwater in each cell (kWh/m3)
         """
-        is_region = self.is_region(region)
+        is_region = self.is_region(region, name=geo_boundary)
         temperature = self.df.loc[is_region, 'GroundwaterTemperature']
         solutes = self.df.loc[is_region, 'GroundwaterSolutes']
         concentration = self.df.loc[is_region, 'TDS']
@@ -289,13 +287,16 @@ class DataFrame:
         self.df.loc[is_region, 'DesalinationEnergy'] = osmosis.minimum_energy(solutes, concentration, temperature)
         self.df.loc[is_region & (self.df['TDS'] <= threshold), 'DesalinationEnergy'] = 0
 
-    def total_irrigation_energy(self):
+    def total_energy(self):
         """
         Aggregates groundwater pumping and desalination energy requirements
         """
         self.df['IrrigationPumpingEnergy'] = self.df['GWPumpingEnergy'] * self.df['IrrigationWaterAverage']
         self.df['IrrigationDesalinationEnergy'] = self.df['DesalinationEnergy'] * self.df['IrrigationWaterAverage']
         self.df['IrrigationEnergyTotal'] = self.df['IrrigationDesalinationEnergy'] + self.df['IrrigationPumpingEnergy']
+        self.df['PopulationPumpingEnergy'] = self.df['GWPumpingEnergy'] * self.df['PopulationWaterAverage']
+        self.df['PopulationDesalinationEnergy'] = self.df['DesalinationEnergy'] * self.df['PopulationWaterAverage']
+        self.df['PopulationEnergyTotal'] = self.df['PopulationDesalinationEnergy'] + self.df['PopulationPumpingEnergy']
 
     def clustering_algorithm(self, population_min, irrigated_min, cluster_num, clusterize):
         """

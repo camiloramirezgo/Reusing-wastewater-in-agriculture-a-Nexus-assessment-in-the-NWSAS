@@ -79,7 +79,7 @@ POP_REUSED_WATER = 0.9
 AGRI_WATER_FRACTION = 0.3
 AGRI_NON_RECOVERABLE = 0.2
 AGRI_WATER_REQ = 'AgWaterReq'
-DISCOUNT_RATE = 0.04
+DISCOUNT_RATE = 0.08
 
 lyr_names = {"Region": FN_REGION,
              "X": FN_X_COORDINATE,
@@ -225,10 +225,10 @@ if module == 1:
                     pop_future = float(specs.loc[specs[SPE_POP_REGION] == region, SPE_POP_FUTURE].mean())
                     urban_current = float(specs.loc[specs[SPE_POP_REGION] == region, SPE_URBAN].mean())
                     urban_future = float(specs.loc[specs[SPE_POP_REGION] == region, SPE_URBAN_FUTURE].mean())
-                    urban_cutoff = 0
+                    urban_cutoff = 100
 
-                    urban_cutoff, urban_modelled = data.calibrate_pop_and_urban(region, pop_actual, pop_future,
-                                                                                urban_current,
+                    urban_cutoff, urban_modelled = data.calibrate_pop_and_urban(SPE_POP_REGION, region, pop_actual,
+                                                                                pop_future, urban_current,
                                                                                 urban_future, urban_cutoff)
                     specs.loc[specs[SPE_POP_REGION] == region, SPE_URBAN_CUTOFF] = urban_cutoff
                     specs.loc[specs[SPE_POP_REGION] == region, SPE_URBAN_MODELLED] = urban_modelled
@@ -248,7 +248,7 @@ if module == 1:
                     b = float(specs.loc[specs[SPE_REGION] == region, SPE_IRRIGATED_AREA])
                     irrigated_area_growth = np.divide(a, b, out=np.zeros_like(a), where=b != 0)
 
-                    data.calculate_irrigation_system(region, total_irrigated_area, irrigation_per_ha,
+                    data.calculate_irrigation_system(SPE_REGION, region, total_irrigated_area, irrigation_per_ha,
                                                      irrigated_area_growth)
 
             if calculate_population_water == 'y':
@@ -259,7 +259,7 @@ if module == 1:
                     print('    - Region {}...'.format(region))
                     urban_uni_water = float(specs.loc[specs[SPE_POP_REGION] == region, SPE_URBAN_WATER].mean())
                     rural_uni_water = float(specs.loc[specs[SPE_POP_REGION] == region, SPE_RURAL_WATER].mean())
-                    data.calculate_population_water(region, urban_uni_water, rural_uni_water)
+                    data.calculate_population_water(SPE_POP_REGION, region, urban_uni_water, rural_uni_water)
 
             if calculate_groundwater_stress == 'y':
                 print('\nCalculating Groundwater Stress indicator...')
@@ -270,8 +270,8 @@ if module == 1:
                     print('    - Region {}...'.format(region))
                     recharge_rate = float(specs.loc[specs[SPE_REGION] == region, SPE_RECHARGE_RATE])
                     environmental_flow = float(specs.loc[specs[SPE_REGION] == region, SPE_ENVIRONMENAL_FLOW])
-                    data.recharge_rate(region, recharge_rate, environmental_flow)
-                    data.groundwater_stress(region, data.df['TotalWithdrawals'])
+                    data.recharge_rate(SPE_REGION, region, recharge_rate, environmental_flow)
+                    data.groundwater_stress(SPE_REGION, region, data.df['TotalWithdrawals'])
 
             if calculate_groundwater_pumping == 'y':
                 print('\nCalculating groundwater pumping energy intensity...')
@@ -284,7 +284,7 @@ if module == 1:
                     pump_efficiency = float(specs.loc[specs[SPE_REGION] == region, SPE_PUMP_EFFICIENCY])
                     irrigation_hours = float(specs.loc[specs[SPE_REGION] == region, SPE_IRRIGATION_HOURS])
                     groundwater_pipe = PipeSystem(groundwater_diameter, groundwater_roughness)
-                    data.groundwater_pumping_energy(region=region, hours=irrigation_hours,
+                    data.groundwater_pumping_energy(geo_boundary=SPE_REGION, region=region, hours=irrigation_hours,
                                                     density=groundwater_density, delivered_head=0,
                                                     pump_efficiency=pump_efficiency, calculate_friction=False,
                                                     viscosity=groundwater_viscosity, pipe=groundwater_pipe)
@@ -297,12 +297,12 @@ if module == 1:
                     data.df['GroundwaterSolutes'] = 'NaCl'
                     data.df['GroundwaterTemperature'] = 25
                     threshold = float(specs.loc[specs[SPE_REGION] == region, SPE_TDS_THRESHOLD])
-                    data.reverse_osmosis_energy(region, threshold, osmosis_system)
+                    data.reverse_osmosis_energy(SPE_REGION, region, threshold, osmosis_system)
 
             print('\nCalculating irrigation energy needs...')
             # for region in specs[SPE_REGION]:
             #     print('    - Region {}...'.format(region))
-            data.total_irrigation_energy()
+            data.total_energy()
 
             if clustering == 'y':
                 print('\nRunning clustering algorithm for population and irrigated land areas...')
@@ -363,9 +363,9 @@ if module == 1:
             if calculate_treatment == 'y':
                 years = float(specs.loc[0, SPE_END_YEAR] - specs.loc[0, SPE_START_YEAR])
                 data.df['IrrigatedGrowthPerCluster'] = 0
-                data.df['PopulationGrowthPerCluster'] = (data.df['PopulationFuturePerCluster'] / \
+                data.df['PopulationGrowthPerCluster'] = (data.df['PopulationFuturePerCluster'] /
                                                          data.df['PopulationPerCluster']) ** (1. / years) - 1
-                data.df['IrrigatedGrowthPerCluster'] = (data.df['IrrigatedAreaFuturePerCluster'] / \
+                data.df['IrrigatedGrowthPerCluster'] = (data.df['IrrigatedAreaFuturePerCluster'] /
                                                         data.df['IrrigatedAreaPerCluster']) ** (1. / years) - 1
 
 
@@ -435,7 +435,7 @@ if module == 1:
             print('\nCalculating final Groundwater Stress indicator...')
             for region in specs[SPE_REGION]:
                 print('    - Region {}...'.format(region))
-                data.groundwater_stress(region, data.df['FinalAverageWaterWithdrawals'], 'Average')
+                data.groundwater_stress(SPE_REGION, region, data.df['FinalAverageWaterWithdrawals'], 'Average')
 
             if create_csv_tables == 'y':
                 print('\nCreating results files...')
