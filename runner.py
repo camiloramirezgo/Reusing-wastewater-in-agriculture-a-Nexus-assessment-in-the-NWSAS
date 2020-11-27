@@ -79,7 +79,7 @@ POP_REUSED_WATER = 0.9
 AGRI_WATER_FRACTION = 0.3
 AGRI_NON_RECOVERABLE = 0.2
 AGRI_WATER_REQ = 'AgWaterReq'
-DISCOUNT_RATE = 0.08
+DISCOUNT_RATE = 0.05
 
 lyr_names = {"Region": FN_REGION,
              "X": FN_X_COORDINATE,
@@ -128,7 +128,7 @@ module = int(input('Select module: 1) Scenario analysis 2) Graphics 3) Cancel: '
 
 if module == 1:
     # specs_path = str(input("Enter the path for the excel file containing all scenarios specifications: "))
-    specs_path = 'Scenarios - provinces.xlsx'
+    specs_path = 'Scenarios - provinces - irrigated area.xlsx'
     xls_specs = pd.ExcelFile(specs_path)
 
     input_scenarios = str(input(
