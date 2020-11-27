@@ -17,7 +17,7 @@ variables = {'gwd': {'sensitivity_vars': {'low': -10,
                      'sensitivity_func': 'times'}}
 names = {'gwd': FN_GWD, 'tds': FN_TDS}
 
-df = pd.read_csv('nwsas_1km_data' + '.gz')
+df = pd.read_csv('nwsas_1km_input_data' + '.gz')
 for variable, values in variables.items():
     for level, value in values['sensitivity_vars'].items():
         file_name = f'nwsas_1km_{level}_{variable}'

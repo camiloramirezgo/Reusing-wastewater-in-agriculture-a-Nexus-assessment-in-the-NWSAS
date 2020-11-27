@@ -3,7 +3,7 @@ library(raster)
 
 Data = "1km_all_scenarios_dr5"
 
-Scenario = "WWR per cluster"
+Scenario = "Baseline"
 
 FilesDirectory <- paste0(Data, "/", Scenario, "/CSV")
 fls <- list()
