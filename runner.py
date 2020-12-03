@@ -128,7 +128,7 @@ module = int(input('Select module: 1) Scenario analysis 2) Graphics 3) Cancel: '
 
 if module == 1:
     # specs_path = str(input("Enter the path for the excel file containing all scenarios specifications: "))
-    specs_path = 'Scenarios - provinces - irrigated area.xlsx'
+    specs_path = 'Scenarios - provinces.xlsx'
     xls_specs = pd.ExcelFile(specs_path)
 
     input_scenarios = str(input(
